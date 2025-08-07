@@ -376,7 +376,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None):
                 
         print(f'Rollout {rollout_id} : {episode_return=}, Success: {is_success}')
         video = np.stack(image_list).transpose(0, 3, 1, 2)
-        wandb_logger.log({f'eval_video/{rollout_id}': wandb.Video(video, fps=50)}, step=i)
+        wandb_logger.log({f'eval_video/{rollout_id}': wandb.Video(video, fps=50, format='gif')}, step=i)
 
 
     success_rate = np.mean(np.array(success_rates))

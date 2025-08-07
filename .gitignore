@@ -129,3 +129,6 @@ tmp/
 wandb_config.py
 logs/
 wandb/
+
+.vscode
+openpi/

@@ -1,6 +1,6 @@
 #!/bin/bash
 proj_name=DSRL_pi0_Libero
-device_id=0
+device_id=3
 
 export DISPLAY=:0
 export MUJOCO_GL=egl
@@ -12,12 +12,10 @@ export EXP=./logs/$proj_name;
 export CUDA_VISIBLE_DEVICES=$device_id
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
-pip install mujoco==3.3.1
-
 python3 examples/launch_train_sim.py \
 --algorithm pixel_sac \
 --env libero \
---prefix dsrl_pi0_libero \
+--prefix both_moka \
 --wandb_project ${proj_name} \
 --batch_size 256 \
 --discount 0.999 \
@@ -32,3 +30,5 @@ python3 examples/launch_train_sim.py \
 --action_magnitude 1.0 \
 --query_freq 20 \
 --hidden_dims 128 \
+--task_id 8 \
+--task_suite libero_10 \
