@@ -1,6 +1,6 @@
 #!/bin/bash
 proj_name=DSRL_pi0_Libero
-device_id=3
+device_id=1
 
 export DISPLAY=:0
 export MUJOCO_GL=egl
@@ -15,7 +15,7 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --algorithm pixel_sac \
 --env libero \
---prefix test \
+--prefix 1klMuStd \
 --wandb_project ${proj_name} \
 --batch_size 256 \
 --discount 0.999 \
@@ -25,7 +25,7 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --log_interval 500 \
 --eval_episodes 10 \
 --multi_grad_step 20 \
---start_online_updates 10 \
+--start_online_updates 500 \
 --resize_image 64 \
 --action_magnitude 1.0 \
 --query_freq 20 \
@@ -34,4 +34,4 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --task_suite libero_90 \
 --pi0_model pi0_libero \
 --pi0_config pi0_libero \
---eval_at_begin 0 \
+--eval_at_begin 1 \

@@ -19,14 +19,12 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
             dist, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['observations'], mutable=['batch_stats'])
             if cross_norm:
-                next_dist = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['next_observations'], mutable=['batch_stats'])
+                next_dist, means, log_stds, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['next_observations'], mutable=['batch_stats'])
             else:
-                next_dist = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['next_observations'])
-            if type(next_dist) == tuple:
-                next_dist, new_model_state = next_dist
+                next_dist, means, log_stds = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['next_observations'])
         else:
-            dist = actor.apply_fn({'params': actor_params}, batch['observations'])
-            next_dist = actor.apply_fn({'params': actor_params}, batch['next_observations'])
+            dist, means, log_stds = actor.apply_fn({'params': actor_params}, batch['observations'])
+            next_dist, means, log_stds = actor.apply_fn({'params': actor_params}, batch['next_observations'])
             new_model_state = {}
         
         # For logging only
@@ -51,6 +49,14 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         else:
             raise ValueError(f"Invalid critic reduction: {critic_reduction}")
         actor_loss = (log_probs * temp.apply_fn({'params': temp.params}) - q).mean()
+        
+        # a. KL only MU
+        # kl_loss = jnp.mean(jnp.square(means))
+        
+        # b. KL MU and STD
+        stds = jnp.exp(log_stds)
+        kl_loss = 0.5 * jnp.mean(stds**2 + means**2 - 1.0 - 2.0 * log_stds)
+        actor_loss = actor_loss + kl_loss * 1.0
 
         things_to_log = {
             'actor_loss': actor_loss,
@@ -64,6 +70,7 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             'std_pi_avg': std_diag_dist.mean(),
             'std_pi_max': std_diag_dist.max(),
             'std_pi_min': std_diag_dist.min(),
+            'kl_loss': kl_loss,
         }
         return actor_loss, (things_to_log, new_model_state)
 

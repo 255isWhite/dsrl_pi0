@@ -13,7 +13,7 @@ def update_critic(
         target_critic: TrainState, temp: TrainState, batch: DatasetDict,
         discount: float, backup_entropy: bool = False,
         critic_reduction: str = 'min') -> Tuple[TrainState, Dict[str, float]]:
-    dist = actor.apply_fn({'params': actor.params}, batch['next_observations'])
+    dist, means, log_stds = actor.apply_fn({'params': actor.params}, batch['next_observations'])
     next_actions, next_log_probs = dist.sample_and_log_prob(seed=key)
     next_qs = target_critic.apply_fn({'params': target_critic.params},
                                      batch['next_observations'], next_actions)

@@ -82,7 +82,8 @@ class LearnedStdTanhNormalPolicy(nn.Module):
     @nn.compact
     def __call__(self,
                  observations: jnp.ndarray,
-                 training: bool = False) -> distrax.Distribution:
+                 training: bool = False,
+                 ) -> distrax.Distribution:
         outputs = MLP(self.hidden_dims,
                       activate_final=True,
                       dropout_rate=self.dropout_rate)(observations,
@@ -94,4 +95,4 @@ class LearnedStdTanhNormalPolicy(nn.Module):
         log_stds = jnp.clip(log_stds, self.log_std_min, self.log_std_max)
 
         distribution = TanhMultivariateNormalDiag(loc=means, scale_diag=jnp.exp(log_stds), low=self.low, high=self.high)
-        return distribution
+        return distribution, means, log_stds
