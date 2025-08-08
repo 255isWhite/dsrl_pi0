@@ -2,6 +2,7 @@ from tqdm import tqdm
 import numpy as np
 import wandb
 import jax
+import jax.numpy as jnp
 from openpi_client import image_tools
 import math
 import PIL
@@ -89,7 +90,7 @@ def obs_to_qpos(obs, variant):
     return qpos
 
 def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger,
-                                       perform_control_evals=True, shard_fn=None, agent_dp=None):
+                                       perform_control_evals=True, shard_fn=None, agent_dp=None, eval_at_begin=True):
     replay_buffer_iterator = replay_buffer.get_iterator(variant.batch_size)
     if shard_fn is not None:
         replay_buffer_iterator = map(shard_fn, replay_buffer_iterator)
@@ -118,7 +119,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
             if len(online_replay_buffer) > variant.start_online_updates:
                 for _ in range(num_gradsteps):
                     # perform first visualization before updating
-                    if i == 0:
+                    if i == 0 and eval_at_begin:
                         print('performing evaluation for initial checkpoint')
                         if perform_control_evals:
                             perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp)
@@ -349,8 +350,15 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None):
                     noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
                     noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
                     
-                actions = agent_dp.infer(obs_pi_zero, noise=noise)["actions"]
-              
+                action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
+                actions = action_dict["actions"]
+                model_actions = jnp.expand_dims(action_dict["norm_actions"], axis=0)
+                model_noise = agent_dp.reverse_infer(obs_pi_zero, action=model_actions)["noise"]
+                
+                # print(f"noise shape {model_noise.shape}, model_noise shape {model_noise.shape}")
+                # print(f"noise[0] {noise[0]}, model_noise[0] {model_noise[0]}")
+                
+                
             action_t = actions[t % query_frequency]
             
             if 'libero' in variant.env:

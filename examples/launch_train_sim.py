@@ -27,6 +27,9 @@ if __name__ == '__main__':
     parser.add_argument('--query_freq', default=-1, help='query frequency', type=int)
     parser.add_argument('--task_id', default=57, help='task id for libero environment', type=int)
     parser.add_argument('--task_suite', default='libero_90', help='task suite for libero environment', type=str)
+    parser.add_argument('--pi0_model', default='pi0_libero', help='which pi0 model to use', type=str)
+    parser.add_argument('--pi0_config', default='pi0_libero', help='which pi0 config to use', type=str)
+    parser.add_argument('--eval_at_begin', default=1, help='whether to evaluate at the beginning of training', type=int)
     
     train_args_dict = dict(
         actor_lr=1e-4,

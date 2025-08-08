@@ -12,10 +12,10 @@ export EXP=./logs/$proj_name;
 export CUDA_VISIBLE_DEVICES=$device_id
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
-python3 examples/launch_train_sim.py \
+JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --algorithm pixel_sac \
 --env libero \
---prefix both_moka \
+--prefix test \
 --wandb_project ${proj_name} \
 --batch_size 256 \
 --discount 0.999 \
@@ -25,10 +25,13 @@ python3 examples/launch_train_sim.py \
 --log_interval 500 \
 --eval_episodes 10 \
 --multi_grad_step 20 \
---start_online_updates 500 \
+--start_online_updates 10 \
 --resize_image 64 \
 --action_magnitude 1.0 \
 --query_freq 20 \
 --hidden_dims 128 \
---task_id 8 \
---task_suite libero_10 \
+--task_id 57 \
+--task_suite libero_90 \
+--pi0_model pi0_libero \
+--pi0_config pi0_libero \
+--eval_at_begin 0 \

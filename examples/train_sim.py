@@ -148,13 +148,14 @@ def main(variant):
     print('sample obs shapes', [(k, v.shape) for k, v in sample_obs.items()])
     print('sample action shape', sample_action.shape)
     
-
+    model_name = variant.pi0_model
+    config_name = variant.pi0_config
     if variant.env == 'libero':
-        config = openpi_config.get_config("pi0_libero")
-        checkpoint_dir = download.maybe_download("s3://openpi-assets/checkpoints/pi0_libero")
+        config = openpi_config.get_config(config_name)
+        checkpoint_dir = download.maybe_download(f"s3://openpi-assets/checkpoints/{model_name}")
     elif variant.env == 'aloha_cube':
-        config = openpi_config.get_config("pi0_aloha_sim")
-        checkpoint_dir = download.maybe_download("s3://openpi-assets/checkpoints/pi0_aloha_sim")
+        config = openpi_config.get_config(config_name)
+        checkpoint_dir = download.maybe_download(f"s3://openpi-assets/checkpoints/{model_name}")
     else:
         raise NotImplementedError()
     agent_dp = policy_config.create_trained_policy(config, checkpoint_dir)
@@ -165,5 +166,5 @@ def main(variant):
     online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size))
     replay_buffer = online_replay_buffer
     replay_buffer.seed(variant.seed)
-    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp)
+    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin)
  
