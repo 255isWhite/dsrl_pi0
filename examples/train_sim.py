@@ -160,7 +160,7 @@ def main(variant):
         raise NotImplementedError()
     agent_dp = policy_config.create_trained_policy(config, checkpoint_dir)
     print("Loaded pi0 policy from %s", checkpoint_dir)
-    agent = PixelSACLearner(variant.seed, sample_obs, sample_action, **kwargs)
+    agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, **kwargs)
 
     online_buffer_size = variant.max_steps  // variant.multi_grad_step
     online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size))

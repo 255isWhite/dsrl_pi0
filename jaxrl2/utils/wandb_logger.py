@@ -104,7 +104,7 @@ class WandBLogger(object):
                 project=project,
                 dir=output_dir,
                 id=experiment_id,
-                settings=wandb.Settings(start_method="thread"),
+                settings=wandb.Settings(start_method="thread", init_timeout=3600),
                 group=group_name,
                 entity=team
             )

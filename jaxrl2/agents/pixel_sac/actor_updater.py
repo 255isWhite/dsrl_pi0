@@ -10,8 +10,8 @@ from jaxrl2.types import Params, PRNGKey
 
 
 def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
-                 temp: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min') -> Tuple[TrainState, Dict[str, float]]:
-    
+                 temp: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', kl_coeff:float=1.0) -> Tuple[TrainState, Dict[str, float]]:
+
     key, key_act = jax.random.split(key, num=2)
 
     def actor_loss_fn(
@@ -51,12 +51,13 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         actor_loss = (log_probs * temp.apply_fn({'params': temp.params}) - q).mean()
         
         # a. KL only MU
-        # kl_loss = jnp.mean(jnp.square(means))
+        kl_loss = jnp.mean(jnp.square(means))
         
         # b. KL MU and STD
-        stds = jnp.exp(log_stds)
-        kl_loss = 0.5 * jnp.mean(stds**2 + means**2 - 1.0 - 2.0 * log_stds)
-        actor_loss = actor_loss + kl_loss * 1.0
+        # stds = jnp.exp(log_stds)
+        # kl_loss = 0.5 * jnp.mean(stds**2 + means**2 - 1.0 - 2.0 * log_stds)
+        
+        actor_loss = actor_loss + kl_loss * kl_coeff
 
         things_to_log = {
             'actor_loss': actor_loss,
@@ -70,6 +71,10 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             'std_pi_avg': std_diag_dist.mean(),
             'std_pi_max': std_diag_dist.max(),
             'std_pi_min': std_diag_dist.min(),
+            'mean_pi_batch_mean': mean_dist.mean(axis=0),
+            'std_pi_batch_mean': std_diag_dist.mean(axis=0),
+            'mean_pi_ac_mean': mean_dist.mean(axis=-1),
+            'std_pi_ac_mean': std_diag_dist.mean(axis=-1),
             'kl_loss': kl_loss,
         }
         return actor_loss, (things_to_log, new_model_state)

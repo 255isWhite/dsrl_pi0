@@ -116,7 +116,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
             else:
                 num_gradsteps = len(traj["rewards"])*variant.multi_grad_step
 
-            if len(online_replay_buffer) > variant.start_online_updates:
+            if True:
                 for _ in range(num_gradsteps):
                     # perform first visualization before updating
                     if i == 0 and eval_at_begin:
@@ -128,7 +128,11 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
 
                     # online perform update once we have some amount of online trajs
                     batch = next(replay_buffer_iterator)
-                    update_info = agent.update(batch)
+                    
+                    if len(online_replay_buffer) > variant.start_online_updates:
+                        update_info = agent.update(batch)
+                    else:
+                        update_info = agent.update_wo_actor(batch)
 
                     pbar.update()
                     i += 1

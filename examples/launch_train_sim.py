@@ -30,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--pi0_model', default='pi0_libero', help='which pi0 model to use', type=str)
     parser.add_argument('--pi0_config', default='pi0_libero', help='which pi0 config to use', type=str)
     parser.add_argument('--eval_at_begin', default=1, help='whether to evaluate at the beginning of training', type=int)
+    parser.add_argument('--kl_coeff', default=1.0, help='coefficient for KL loss', type=float)
     
     train_args_dict = dict(
         actor_lr=1e-4,

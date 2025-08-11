@@ -40,7 +40,9 @@ class TanhMultivariateNormalDiag(distrax.Transformed):
                  high: Optional[jnp.ndarray] = None):
         distribution = distrax.MultivariateNormalDiag(loc=loc,
                                                       scale_diag=scale_diag)
-
+        self.low = low
+        self.high = high
+        
         layers = []
 
         if not (low is None or high is None):
