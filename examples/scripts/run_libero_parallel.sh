@@ -3,11 +3,34 @@ set -euo pipefail
 
 # ===== 可配置 =====
 proj_name="DSRL_pi0_Libero"
-gpu_list=(2 3)                          # 物理 GPU ID
-kl_list=(1.0 0.0)
+# gpu_list=(2 3)                          # 物理 GPU ID
+
+# ablations=(
+#   "qwarmup=1,seed=42"
+#   "qwarmup=1,seed=43"
+# )
+
+gpu_list=(4 5 6 7)                          # 物理 GPU ID
+ablations=(
+  "task_id=8,task_suite=libero_90"
+  "task_id=8,task_suite=libero_90,qwarmup=1"
+  "task_id=8,task_suite=libero_90,kl_coeff=1.0"
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0"
+
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=10000"
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=30000"
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000"
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=100000"
+
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.1"
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.2"
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.5"
+  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=1.0"
+)
+
 
 per_proc_cap_gb=12
-max_concurrency_per_gpu=2
+max_concurrency_per_gpu=3
 safety_gb=1
 sleep_between_launch=5
 check_interval=10
@@ -21,17 +44,33 @@ export EXP=./logs/$proj_name;
 # ====== 新增：进程 PID 记录与 Ctrl+C 杀停 ======
 pids=()
 cleanup() {
-    echo ""
-    echo "⚠️ 捕获到中断信号，正在杀掉所有子进程..."
-    for pid in "${pids[@]}"; do
-        if kill -0 "$pid" 2>/dev/null; then
-            echo "  → kill $pid"
-            kill -TERM "$pid" 2>/dev/null || true
-        fi
-    done
-    wait
-    echo "✅ 已全部杀掉"
-    exit 1
+  echo ""
+  echo "⚠️ 捕获到中断信号，正在杀掉所有子进程..."
+
+  # 第一次温柔终止
+  for id in "${pids[@]}"; do
+    pid="${id%%:*}"; pgid="${id##*:}"
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "  → TERM 进程组 -$pgid"
+      kill -TERM "-$pgid" 2>/dev/null || true
+    fi
+  done
+
+  # 给点时间做清理
+  sleep 2
+
+  # 兜底强杀
+  for id in "${pids[@]}"; do
+    pid="${id%%:*}"; pgid="${id##*:}"
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "  → KILL 进程组 -$pgid"
+      kill -KILL "-$pgid" 2>/dev/null || true
+    fi
+  done
+
+  wait
+  echo "✅ 已全部杀掉"
+  exit 1
 }
 trap cleanup SIGINT SIGTERM
 
@@ -107,59 +146,114 @@ print_gpu_status() {
   echo "-------------------------"
 }
 
-# 持锁启动到指定槽
+# ✅ 新：把 "k=v,k2=v2" 转成安全的命令行片段：--k v --k2 v2
+dict_to_args() {
+  local kvs="$1"
+  local args=()
+  IFS=',' read -ra pairs <<< "$kvs"
+  for pair in "${pairs[@]}"; do
+    IFS='=' read -r k v <<< "$pair"
+    k="$(echo "$k" | xargs)"
+    v="$(echo "$v" | xargs)"
+    if [[ -z "${k}" ]]; then continue; fi
+    if [[ -z "${v}" ]]; then
+      # 空值时按 flag 处理：--flag
+      args+=("--${k}")
+    else
+      args+=("--${k}" "${v}")
+    fi
+  done
+  # 逐个做 Shell 安全转义并打印为一行
+  printf '%q ' "${args[@]}"
+}
+
+# ✅ 极稳的 tag 生成：逗号->下划线，等号->短横，剥掉不安全字符
+kv_to_tag() {
+  local kvs="$1"
+  python3 - "$kvs" <<'PY'
+import re, sys
+s = sys.argv[1].strip()
+# 规范化：去空白、逗号->_、等号->-
+s = s.replace(',', '_').replace('=', '-')
+# 仅保留: 字母数字、下划线、点、冒号、短横
+s = re.sub(r'[^A-Za-z0-9_.:-]', '-', s)
+print(s)
+PY
+}
+
+
 start_task_on_slot() {
   local gpu_id=$1
   local slot=$2
-  local kl=$3
+  local kvs="$3"
   local mem_fraction=$4
+
   local lock_file; lock_file=$(slot_lock_path "$gpu_id" "$slot")
-  local log_file="logs/kl_coeff_ablation/gpu${gpu_id}_slot${slot}.log"
+  local norm_kvs="$kvs"
+  local ablation_args; ablation_args="$(dict_to_args "$norm_kvs")"
+  local tag; tag="$(kv_to_tag "$norm_kvs")"
+
+  local log_dir="logs/ablation_any"
+  mkdir -p "$log_dir"
+  local log_file="${log_dir}/${tag}.log"
+  # 如果文件已存在则清空
+  : > "$log_file"
 
   local t; t=$(date "+%Y-%m-%d %H:%M:%S")
-  echo "[$t] 启动 GPU $gpu_id / slot $slot → kl=$kl, mem_fraction=$mem_fraction" | tee -a "$log_file"
+  echo "[$t] 启动 GPU $gpu_id / slot $slot → ablation={$kvs}, mem_fraction=$mem_fraction" | tee -a "$log_file"
   print_gpu_status | tee -a "$log_file"
 
-  # 子进程生命周期内持有锁
-  flock -n "$lock_file" bash -lc "
-    CUDA_VISIBLE_DEVICES=$gpu_id \
-    MUJOCO_EGL_DEVICE_ID=$gpu_id \
-    XLA_PYTHON_CLIENT_PREALLOCATE=true \
-    XLA_PYTHON_CLIENT_MEM_FRACTION=$mem_fraction \
-    python3 examples/launch_train_sim.py \
+  # 用子壳承载锁，然后 exec 成为 python 进程
+  (
+    # 1) 打开并加锁到 FD 200（锁会随 exec 继承）
+    exec 200>"$lock_file"
+    flock -n 200 || exit 1
+
+    # 2) 环境变量
+    export CUDA_VISIBLE_DEVICES=$gpu_id
+    export MUJOCO_EGL_DEVICE_ID=$gpu_id
+    export XLA_PYTHON_CLIENT_PREALLOCATE=true
+    export XLA_PYTHON_CLIENT_MEM_FRACTION=$mem_fraction
+
+    # 3) 用 exec 让当前 PID 直接变成 python（记录到的就是 python 的 PID）
+    exec python3 examples/launch_train_sim.py \
       --algorithm pixel_sac \
       --env libero \
-      --prefix Qwarmup_${kl}coeff_klMu \
+      --seed 42 \
+      --prefix "${tag}" \
       --wandb_project ${proj_name} \
       --batch_size 256 \
       --discount 0.999 \
-      --seed 0 \
-      --max_steps 500000 \
+      --max_steps 150000 \
       --eval_interval 10000 \
       --log_interval 500 \
-      --eval_episodes 20 \
+      --eval_episodes 10 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --resize_image 64 \
       --action_magnitude 1.0 \
       --query_freq 20 \
       --hidden_dims 128 \
-      --task_id 57 \
-      --task_suite libero_90 \
-      --pi0_model pi0_libero \
-      --pi0_config pi0_libero \
+      --task_id 3 \
+      --task_suite libero_goal \
+      --pi0_model /mnt/ssd1/data/zh1/pi0/checkpoints/pi0_libero130_1shot/libero130_1shot/20000 \
+      --pi0_config pi0_libero130_1shot \
       --eval_at_begin 1 \
-      --kl_coeff $kl \
-    > \"$log_file\" 2>&1
-  " &
+      --qwarmup 1 \
+      --kl_coeff 1.0 \
+      --max_timesteps 400 \
+      $(echo $ablation_args) \
+      >>"$log_file" 2>&1
+  ) &
   pid=$!
-  pids+=("$pid")  # 记录 PID
+  # 额外记录进程组，便于一刀切
+  pgid="$(ps -o pgid= "$pid" | tr -d ' ')"
+  pids+=("$pid:$pgid")
 }
 
-mkdir -p logs/kl_coeff_ablation
 
 # ===== 主调度 =====
-for kl in "${kl_list[@]}"; do
+for kvs in "${ablations[@]}"; do
   while true; do
     min_occ=999
     declare -A occ_map
@@ -184,7 +278,7 @@ for kl in "${kl_list[@]}"; do
       for slot in $(seq 0 $((max-1))); do
         if slot_is_free "$gpu_id" "$slot"; then
           mem_fraction=$(calc_fraction_for_gpu "$gpu_id")
-          start_task_on_slot "$gpu_id" "$slot" "$kl" "$mem_fraction"
+          start_task_on_slot "$gpu_id" "$slot" "$kvs" "$mem_fraction"   # ✅ 传入本次 ablation
           sleep "$sleep_between_launch"
           launched=1
           break

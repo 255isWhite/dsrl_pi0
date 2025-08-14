@@ -31,6 +31,7 @@ class ReplayBuffer(Dataset):
         self.observation_space = observation_space
         self.action_space = action_space
         self.capacity = capacity
+        self.magic_shape = (self.action_space.shape[0], 7)
 
         print("making replay buffer of capacity ", self.capacity)
 
@@ -38,6 +39,8 @@ class ReplayBuffer(Dataset):
         next_observations = _init_replay_dict(self.observation_space, self.capacity)
         actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
         next_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
+        norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
+        clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         rewards = np.empty((self.capacity, ), dtype=np.float32)
         masks = np.empty((self.capacity, ), dtype=np.float32)
         discount = np.empty((self.capacity, ), dtype=np.float32)
@@ -47,6 +50,8 @@ class ReplayBuffer(Dataset):
             'next_observations': next_observations,
             'actions': actions,
             'next_actions': next_actions,
+            'norm_actions': norm_actions,
+            'clean_actions': clean_actions,
             'rewards': rewards,
             'masks': masks,
             'discount': discount,
@@ -78,6 +83,8 @@ class ReplayBuffer(Dataset):
         terminals_list = []
         masks_list = []
         discount_list = []
+        norm_actions_list = []
+        clean_actions_list = []
 
         for i in self.which_trajs:
             start, end = self.traj_bounds[i]
@@ -94,6 +101,8 @@ class ReplayBuffer(Dataset):
             next_observations_list.append(next_obs_dict_curr_traj)
             
             actions_list.append(self.data['actions'][start:end])
+            norm_actions_list.append(self.data['norm_actions'][start:end])
+            clean_actions_list.append(self.data['clean_actions'][start:end])
             rewards_list.append(self.data['rewards'][start:end])
             terminals_list.append(1-self.data['masks'][start:end])
             masks_list.append(self.data['masks'][start:end])
@@ -104,11 +113,11 @@ class ReplayBuffer(Dataset):
             'observations': observations_list,
             'next_observations': next_observations_list,
             'actions': actions_list,
+            'norm_actions': norm_actions_list,
+            'clean_actions': clean_actions_list,
             'rewards': rewards_list,
             'terminals': terminals_list,
             'masks': masks_list,
-            
-            
         }
         return batch
         
@@ -118,6 +127,8 @@ class ReplayBuffer(Dataset):
             observations = _init_replay_dict(self.observation_space, self.capacity)
             next_observations = _init_replay_dict(self.observation_space, self.capacity)
             actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
+            norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
+            clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
             next_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
             rewards = np.empty((self.capacity, ), dtype=np.float32)
             masks = np.empty((self.capacity, ), dtype=np.float32)
@@ -127,6 +138,8 @@ class ReplayBuffer(Dataset):
                 'observations': observations,
                 'next_observations': next_observations,
                 'actions': actions,
+                'norm_actions': norm_actions,
+                'clean_actions': clean_actions,
                 'next_actions': next_actions,
                 'rewards': rewards,
                 'masks': masks,

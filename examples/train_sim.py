@@ -8,7 +8,8 @@ os.environ['XLA_FLAGS'] = xla_flags
 import pathlib, copy
 
 import jax
-from jaxrl2.agents.pixel_sac.pixel_sac_learner import PixelSACLearner
+from jaxrl2.agents.pixel_sac_residual import PixelSACResidualLearner
+from jaxrl2.agents.pixel_sac import PixelSACLearner
 from jaxrl2.utils.general_utils import add_batch_dim
 import numpy as np
 
@@ -95,9 +96,9 @@ def main(variant):
     if kwargs.pop('cosine_decay', False):
         kwargs['decay_steps'] = variant.max_steps
         
-    if not variant.prefix:
-        import uuid
-        variant.prefix = str(uuid.uuid4().fields[-1])[:5]
+    # if not variant.prefix:
+    #     import uuid
+    #     variant.prefix = str(uuid.uuid4().fields[-1])[:5]
 
     if variant.suffix:
         expname = create_exp_name(variant.prefix, seed=variant.seed) + f"_{variant.suffix}"
@@ -119,10 +120,6 @@ def main(variant):
         eval_env = env
         variant.task_description = task_description
         variant.env_max_reward = 1
-        if variant.task_suite == 'libero_10':
-            variant.max_timesteps = 500
-        else:
-            variant.max_timesteps = 400
     elif variant.env == 'aloha_cube':
         from gymnasium.envs.registration import register
         register(
@@ -135,7 +132,6 @@ def main(variant):
         env = gym.make("gym_aloha/AlohaTransferCube-v0", obs_type="pixels_agent_pos", render_mode="rgb_array")
         eval_env = copy.deepcopy(env)
         variant.env_max_reward = 4
-        variant.max_timesteps = 400
         
 
     group_name = variant.prefix + '_' + variant.launch_group_id
@@ -148,23 +144,25 @@ def main(variant):
     print('sample obs shapes', [(k, v.shape) for k, v in sample_obs.items()])
     print('sample action shape', sample_action.shape)
     
-    model_name = variant.pi0_model
+    model_path = variant.pi0_model
     config_name = variant.pi0_config
     if variant.env == 'libero':
         config = openpi_config.get_config(config_name)
-        checkpoint_dir = download.maybe_download(f"s3://openpi-assets/checkpoints/{model_name}")
-    elif variant.env == 'aloha_cube':
-        config = openpi_config.get_config(config_name)
-        checkpoint_dir = download.maybe_download(f"s3://openpi-assets/checkpoints/{model_name}")
+        checkpoint_dir = download.maybe_download(model_path)
     else:
         raise NotImplementedError()
-    agent_dp = policy_config.create_trained_policy(config, checkpoint_dir)
+    agent_dp, dp_unnorm_transform = policy_config.create_trained_policy(config, checkpoint_dir)
     print("Loaded pi0 policy from %s", checkpoint_dir)
-    agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, **kwargs)
-
+    
+    if variant.use_res:
+        print("Using residual learner")
+        agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, **kwargs)
+    else:
+        print("Using pixel sac learner")
+        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, **kwargs)
+    
     online_buffer_size = variant.max_steps  // variant.multi_grad_step
     online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size))
     replay_buffer = online_replay_buffer
     replay_buffer.seed(variant.seed)
-    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin)
- 
+    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin, dp_unnorm_transform=dp_unnorm_transform)

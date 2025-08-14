@@ -2,7 +2,7 @@ import argparse
 import sys
 from examples.train_sim import main
 from jaxrl2.utils.launch_util import parse_training_args
-
+from general_utils import *
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -30,7 +30,12 @@ if __name__ == '__main__':
     parser.add_argument('--pi0_model', default='pi0_libero', help='which pi0 model to use', type=str)
     parser.add_argument('--pi0_config', default='pi0_libero', help='which pi0 config to use', type=str)
     parser.add_argument('--eval_at_begin', default=1, help='whether to evaluate at the beginning of training', type=int)
-    parser.add_argument('--kl_coeff', default=1.0, help='coefficient for KL loss', type=float)
+    parser.add_argument('--max_timesteps', default=500, help='max timesteps per episode', type=int)
+    parser.add_argument('--kl_coeff', default=0.0, help='coefficient for KL loss', type=float)
+    parser.add_argument('--qwarmup', default=0, help='whether to warmup the Q network', type=int)
+    parser.add_argument('--use_res', default=0, help='whether to use residual learner', type=int)
+    parser.add_argument('--res_coeff', default=0.1, help='coefficient for residual action', type=float)
+    parser.add_argument('--res_H', default=100_000, help='horizon for residual action', type=int)
     
     train_args_dict = dict(
         actor_lr=1e-4,
@@ -58,7 +63,7 @@ if __name__ == '__main__':
         )
 
     variant, args = parse_training_args(train_args_dict, parser)
-    print(variant)
+    print(dict_pretty_str(variant))
     main(variant)
     sys.exit()
     
