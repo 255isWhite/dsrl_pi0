@@ -105,47 +105,51 @@ def update_critic_wo_actor(
 
 
 def update_clean_critic(
-        key: PRNGKey, critic: TrainState, clean_critic: TrainState, res_actor: TrainState,
+        key: PRNGKey, clean_critic: TrainState, target_clean_critic: TrainState, res_actor: TrainState,
         batch: DatasetDict, discount: float, res_coeff: float, res_prob: float, 
         backup_entropy: bool = False, critic_reduction: str = 'min', dp_unnorm_transform=None) -> Tuple[TrainState, Dict[str, float]]:
     
     res_actions, raw_means = res_actor.apply_fn({'params': res_actor.params}, batch['observations'])
-    
-    noise_qs = critic.apply_fn({'params': critic.params},
-                                batch['observations'], batch['actions'])
+    next_res_actions, next_raw_means = res_actor.apply_fn({'params': res_actor.params}, batch['next_observations'])
+    next_actual_norm_actions = batch['next_actual_norm_actions'].reshape(next_res_actions.shape[0], -1)
+    next_qs = target_clean_critic.apply_fn({'params': target_clean_critic.params},
+                                     batch['next_observations'], next_res_actions + next_actual_norm_actions)
     
     if critic_reduction == 'min':
-        target_noise_q = noise_qs.min(axis=0)
+        next_q = next_qs.min(axis=0)
     elif critic_reduction == 'mean':
-        target_noise_q = noise_qs.mean(axis=0)
+        next_q = next_qs.mean(axis=0)
     else:
         raise NotImplemented()
 
-    target_noise_q = jax.lax.stop_gradient(target_noise_q)
+    target_q = batch['rewards'] + batch["discount"] * batch['masks'] * next_q
 
     def clean_critic_loss_fn(
             clean_critic_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
         
-        rng, subkey = jax.random.split(key)
-        rand_val = jax.random.uniform(subkey, ())  # 标量 in [0,1)
-        clean_actions = jax.lax.cond(
-            rand_val < res_prob,                                # 谓词是 tracer 也没问题
-            lambda _: batch['norm_actions'].reshape(res_actions.shape[0],-1) + res_actions * res_coeff,  # true 分支
-            lambda _: batch['norm_actions'].reshape(res_actions.shape[0],-1),                   # false 分支
-            operand=None
-        )
+        # rng, subkey = jax.random.split(key)
+        # rand_val = jax.random.uniform(subkey, ())  # 标量 in [0,1)
+        # clean_actions = jax.lax.cond(
+        #     rand_val < res_prob,                                # 谓词是 tracer 也没问题
+        #     lambda _: batch['norm_actions'].reshape(res_actions.shape[0],-1) + res_actions * res_coeff,  # true 分支
+        #     lambda _: batch['norm_actions'].reshape(res_actions.shape[0],-1),                   # false 分支
+        #     operand=None
+        # )
+        clean_actions = batch['actual_norm_actions'].reshape(res_actions.shape[0],-1)
         # clean_actions = dp_unnorm_transform({'actions': clean_actions})['actions']
                 
         clean_qs = clean_critic.apply_fn({'params': clean_critic_params}, batch['observations'],
                              clean_actions)
         
-        clean_critic_loss = ((clean_qs - target_noise_q)**2).mean()
+        clean_critic_loss = ((clean_qs - target_q)**2).mean()
         return clean_critic_loss, {
             'clean_critic_loss': clean_critic_loss,
             'q': clean_qs.mean(),
             'q_batch_mean': clean_qs.mean(axis=0),
             'bacth_norm_actions_mean': batch['norm_actions'].mean(axis=0),
             'bacth_norm_actions_std': batch['norm_actions'].std(axis=0),
+            'bacth_norm_actual_actions_mean': batch['actual_norm_actions'].mean(axis=0),
+            'bacth_norm_actual_actions_std': batch['actual_norm_actions'].std(axis=0),
             'res_actions_mean': res_actions.mean(axis=0),
             'res_actions_std': res_actions.std(axis=0),
             'res_actions_min': res_actions.min(axis=0),

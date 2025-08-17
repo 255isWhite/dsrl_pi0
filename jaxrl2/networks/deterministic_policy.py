@@ -11,6 +11,7 @@ class DeterministicPolicy(nn.Module):
     hidden_dims: Sequence[int]
     action_dim: int
     dropout_rate: Optional[float] = None
+    action_magnitude: float = 1.0
 
     @nn.compact
     def __call__(self,
@@ -22,7 +23,7 @@ class DeterministicPolicy(nn.Module):
                       dropout_rate=self.dropout_rate)(observations,
                                                       training=training)
 
-        means = nn.Dense(self.action_dim, kernel_init=default_init(1e-2))(outputs)
-        actions = jnp.tanh(means)
+        raw_means = nn.Dense(self.action_dim, kernel_init=default_init(1e-2))(outputs)
+        actions = jnp.tanh(raw_means) * self.action_magnitude
         
-        return actions
+        return actions, raw_means

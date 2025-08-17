@@ -12,28 +12,42 @@ proj_name="DSRL_pi0_Libero"
 
 gpu_list=(4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "task_id=8,task_suite=libero_90"
-  "task_id=8,task_suite=libero_90,qwarmup=1"
-  "task_id=8,task_suite=libero_90,kl_coeff=1.0"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0"
+  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
 
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=10000"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=30000"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=100000"
+  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
+  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
+  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
+  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
+  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
+  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
 
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.1"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.2"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.5"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=1.0"
+  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
+
+  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
+  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
+  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
+  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
+  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
+  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
+
 )
 
 
 per_proc_cap_gb=12
-max_concurrency_per_gpu=3
+max_concurrency_per_gpu=6
 safety_gb=1
-sleep_between_launch=5
-check_interval=10
+sleep_between_launch=1
+check_interval=3
 
 export DISPLAY=:0
 export MUJOCO_GL=egl
@@ -217,14 +231,14 @@ start_task_on_slot() {
 
     # 3) 用 exec 让当前 PID 直接变成 python（记录到的就是 python 的 PID）
     exec python3 examples/launch_train_sim.py \
-      --algorithm pixel_sac \
+      --algorithm pixel_sac_residual_2td \
       --env libero \
       --seed 42 \
       --prefix "${tag}" \
       --wandb_project ${proj_name} \
       --batch_size 256 \
       --discount 0.999 \
-      --max_steps 150000 \
+      --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
       --eval_episodes 10 \
@@ -234,8 +248,8 @@ start_task_on_slot() {
       --action_magnitude 1.0 \
       --query_freq 20 \
       --hidden_dims 128 \
-      --task_id 3 \
-      --task_suite libero_goal \
+      --task_id 21 \
+      --task_suite libero_90 \
       --pi0_model /mnt/ssd1/data/zh1/pi0/checkpoints/pi0_libero130_1shot/libero130_1shot/20000 \
       --pi0_config pi0_libero130_1shot \
       --eval_at_begin 1 \

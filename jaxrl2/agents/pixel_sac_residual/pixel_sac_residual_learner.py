@@ -47,7 +47,7 @@ def _update_jit(
     target_critic_params: Params, temp: TrainState, batch: TrainState,
     discount: float, tau: float, target_entropy: float,
     critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int,
-    kl_coeff: float, res_coeff: float, res_prob: float
+    kl_coeff: float, res_coeff: float, res_prob: float, td3_noise_scale: float
 ) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
     aug_pixels = batch['observations']['pixels']
     aug_next_pixels = batch['next_observations']['pixels']
@@ -118,7 +118,7 @@ def _update_jit_wo_actor(
     target_critic_params: Params, batch: TrainState,
     discount: float, tau: float, target_entropy: float,
     critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int,
-    res_coeff: float, res_prob: float
+    res_coeff: float, res_prob: float, td3_noise_scale: float
 ) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
     aug_pixels = batch['observations']['pixels']
     aug_next_pixels = batch['next_observations']['pixels']
@@ -209,6 +209,8 @@ class PixelSACResidualLearner(Agent):
                  kl_coeff: float = 1.0,
                  res_coeff: float = 0.1,
                  dp_unnorm_transform = None,
+                 td3_noise_scale: float = 0.2,
+                 decay_kl: int = 0,
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -228,6 +230,8 @@ class PixelSACResidualLearner(Agent):
         self.kl_coeff = kl_coeff
         self.res_coeff = res_coeff
         self.dp_unnorm_transform = dp_unnorm_transform
+        self.td3_noise_scale = td3_noise_scale
+        self.decay_kl = decay_kl
 
         rng = jax.random.PRNGKey(seed)
         rng, actor_key, critic_key, temp_key, res_actor_key, clean_critic_key = jax.random.split(rng, 6)
@@ -318,7 +322,7 @@ class PixelSACResidualLearner(Agent):
         print(self.critic_reduction)
         
         # residual head part
-        res_policy_def = DeterministicPolicy(hidden_dims, self.magic_dim, dropout_rate=dropout_rate)
+        res_policy_def = DeterministicPolicy(hidden_dims, self.magic_dim, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
         res_actor_def = PixelMultiplexer(encoder=encoder_def,
                                      network=res_policy_def,
                                      latent_dim=latent_dim,
@@ -361,11 +365,16 @@ class PixelSACResidualLearner(Agent):
         
 
     def update(self, batch: FrozenDict, res_prob: float) -> Dict[str, float]:
+        if self.decay_kl:
+            kl_coeff = 1.0 - res_prob
+        else:
+            kl_coeff = self.kl_coeff
         new_rng, new_actor, new_critic, new_target_critic, new_res_actor, new_clean_critic, new_temp, info, res_info = _update_jit(
             self._rng, self._actor, self._critic, self._res_actor, self._clean_critic,
             self._target_critic_params, self._temp,
             batch, self.discount, self.tau, self.target_entropy, self.critic_reduction,
-            self.color_jitter, self.aug_next, self.num_cameras, self.kl_coeff, self.res_coeff, res_prob
+            self.color_jitter, self.aug_next, self.num_cameras, 
+            kl_coeff, self.res_coeff, res_prob, self.td3_noise_scale
         )
 
         self._rng = new_rng
@@ -381,7 +390,8 @@ class PixelSACResidualLearner(Agent):
         new_rng, new_critic, new_target_critic, new_res_actor, new_clean_critic, info, res_info = _update_jit_wo_actor(
             self._rng, self._actor, self._critic, self._res_actor, self._clean_critic,
             self._target_critic_params, batch, self.discount,
-            self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, self.aug_next, self.num_cameras, self.res_coeff, res_prob
+            self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, self.aug_next, self.num_cameras, 
+            self.res_coeff, res_prob, self.td3_noise_scale
             )
 
         self._rng = new_rng

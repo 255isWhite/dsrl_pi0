@@ -36,10 +36,14 @@ if __name__ == '__main__':
     parser.add_argument('--use_res', default=0, help='whether to use residual learner', type=int)
     parser.add_argument('--res_coeff', default=0.1, help='coefficient for residual action', type=float)
     parser.add_argument('--res_H', default=100_000, help='horizon for residual action', type=int)
+    parser.add_argument('--td3_noise_scale', default=0.2, help='TD3 noise scale', type=float)
+    parser.add_argument('--label', default='', help='label for wandb run', type=str)
+    parser.add_argument('--action_magnitude', default=1.0, help='magnitude of actions', type=float)
+    parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     
     train_args_dict = dict(
         actor_lr=1e-4,
-        critic_lr= 3e-4,
+        critic_lr=3e-4,
         temp_lr=3e-4,
         hidden_dims= (128, 128, 128),
         cnn_features= (32, 32, 32, 32),
@@ -58,7 +62,7 @@ if __name__ == '__main__':
         softmax_temperature=-1,
         target_entropy='auto',
         num_qs=10,
-        action_magnitude=1.0,
+        # action_magnitude=1.0,
         num_cameras=1,
         )
 

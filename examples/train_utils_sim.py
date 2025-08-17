@@ -97,14 +97,17 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
 
     total_env_steps = 0
     i = 0
-    res_prob = i / variant.res_H if i <= variant.res_H else 1.0
     wandb_logger.log({'num_online_samples': 0}, step=i)
     wandb_logger.log({'num_online_trajs': 0}, step=i)
     wandb_logger.log({'env_steps': 0}, step=i)
+    warmup_steps = variant.start_online_updates * variant.query_freq
                             
     with tqdm(total=variant.max_steps, initial=0) as pbar:
         while i <= variant.max_steps:
-            res_prob = i / variant.res_H if i <= variant.res_H else 1.0
+            if len(online_replay_buffer) <= variant.start_online_updates:
+                res_prob = 0.0
+            else:
+                res_prob = (i-warmup_steps)/ variant.res_H if i <= (variant.res_H + warmup_steps) else 1.0
             traj = collect_traj(variant, agent, env, i, agent_dp, res_prob, dp_unnorm_transform)
             traj_id = online_replay_buffer._traj_counter
             add_online_data_to_buffer(variant, traj, online_replay_buffer)
@@ -116,6 +119,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                 'replay_buffer_size': len(online_replay_buffer),
                 'episode_return (exploration)': traj['episode_return'],
                 'is_success (exploration)': int(traj['is_success']),
+                'residual/res_prob': res_prob,
             }, i)
             
             if variant.get("num_online_gradsteps_batch", -1) > 0:
@@ -138,7 +142,6 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                     batch = next(replay_buffer_iterator)
                     
                     # noise&&clean space Critic & Actor updates
-                    res_prob = i / variant.res_H if i <= variant.res_H else 1.0
                     if len(online_replay_buffer) <= variant.start_online_updates:
                         if variant.qwarmup:
                             if variant.use_res:
@@ -193,6 +196,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
     actions = np.array(traj['actions']) # (T, chunk_size, action_dim )
     norm_actions = np.array(traj['norm_actions']) # (T, chunk_size, action_dim )
     clean_actions = np.array(traj['clean_actions']) # (T, chunk_size, action_dim )
+    actual_norm_actions = np.array(traj['actual_norm_actions']) # (T, chunk_size, action_dim )
     episode_len = len(actions)
     rewards = np.array(traj['rewards'])
     masks = np.array(traj['masks'])
@@ -214,6 +218,8 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
             next_actions=actions[t + 1] if t < episode_len - 1 else actions[t],
             norm_actions=norm_actions[t],
             clean_actions=clean_actions[t],
+            actual_norm_actions=actual_norm_actions[t],
+            next_actual_norm_actions=actual_norm_actions[t + 1] if t < episode_len - 1 else actual_norm_actions[t],
             rewards=rewards[t],
             masks=masks[t],
             discount=variant.discount ** discount_horizon
@@ -240,6 +246,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     obs_list = []
     norm_action_list = []
     clean_action_list = []
+    actual_norm_action_list = []
 
     for t in tqdm(range(max_timesteps)):
         curr_image = obs_to_img(obs, variant)
@@ -287,14 +294,17 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             rand_val = jax.random.uniform(key, ())
             if rand_val < res_prob and use_res:
                 actions = action_dict["norm_actions"]+ res_coeff * agent.sample_residual_actions(obs_dict)
+                actual_norm_action = actions.copy()
                 actions = dp_unnorm_transform({'actions': actions})['actions']
             else:
                 actions = action_dict["actions"]
+                actual_norm_action = action_dict["norm_actions"]
             
             action_list.append(actions_noise)
             obs_list.append(obs_dict)
             norm_action_list.append(jnp.expand_dims(action_dict["norm_actions"][0], axis=0))
             clean_action_list.append(jnp.expand_dims(action_dict["actions"][0], axis=0))
+            actual_norm_action_list.append(jnp.expand_dims(actual_norm_action[0], axis=0))
             
         action_t = actions[t % query_frequency]
         if 'libero' in variant.env:
@@ -342,6 +352,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         'actions': action_list,
         'norm_actions': norm_action_list,
         'clean_actions': clean_action_list,
+        'actual_norm_actions': actual_norm_action_list,
         'rewards': rewards,
         'masks': masks,
         'is_success': is_success,

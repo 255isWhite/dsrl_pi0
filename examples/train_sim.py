@@ -9,6 +9,7 @@ import pathlib, copy
 
 import jax
 from jaxrl2.agents.pixel_sac_residual import PixelSACResidualLearner
+from jaxrl2.agents.pixel_sac_residual_2td import PixelSACResidualLearner2TD
 from jaxrl2.agents.pixel_sac import PixelSACLearner
 from jaxrl2.utils.general_utils import add_batch_dim
 import numpy as np
@@ -85,6 +86,11 @@ def main(variant):
     print('batch size', variant.batch_size)
     print('task_id', variant.task_id)
     print('task_suite', variant.task_suite)
+    print('algorithm', variant.algorithm)
+    if 'residual' in variant.algorithm:
+        variant.use_res = 1
+    else:
+        variant.use_res = 0
     # we shard the leading dimension (batch dimension) accross all devices evenly
     sharding = jax.sharding.PositionalSharding(devices)
     shard_fn = partial(shard_batch, sharding=sharding)
@@ -95,10 +101,12 @@ def main(variant):
     kwargs = variant['train_kwargs']
     if kwargs.pop('cosine_decay', False):
         kwargs['decay_steps'] = variant.max_steps
+    kwargs['action_magnitude'] = variant.action_magnitude
         
     # if not variant.prefix:
     #     import uuid
     #     variant.prefix = str(uuid.uuid4().fields[-1])[:5]
+    variant.prefix = variant.label + '_' + variant.prefix
 
     if variant.suffix:
         expname = create_exp_name(variant.prefix, seed=variant.seed) + f"_{variant.suffix}"
@@ -136,7 +144,7 @@ def main(variant):
 
     group_name = variant.prefix + '_' + variant.launch_group_id
     wandb_output_dir = tempfile.mkdtemp()
-    wandb_logger = WandBLogger(variant.prefix != '', variant, variant.wandb_project, experiment_id=expname, output_dir=wandb_output_dir, group_name=group_name)
+    wandb_logger = WandBLogger(variant.label != '', variant, variant.wandb_project, experiment_id=expname, output_dir=wandb_output_dir, group_name=group_name)
 
     dummy_env = DummyEnv(variant)
     sample_obs = add_batch_dim(dummy_env.observation_space.sample())
@@ -154,12 +162,18 @@ def main(variant):
     agent_dp, dp_unnorm_transform = policy_config.create_trained_policy(config, checkpoint_dir)
     print("Loaded pi0 policy from %s", checkpoint_dir)
     
-    if variant.use_res:
-        print("Using residual learner")
-        agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, **kwargs)
-    else:
+
+    if variant.algorithm == 'pixel_sac':
         print("Using pixel sac learner")
-        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, **kwargs)
+        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl ,**kwargs)
+    elif variant.algorithm == 'pixel_sac_residual':
+        print("Using residual learner")
+        agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
+    elif variant.algorithm == 'pixel_sac_residual_2td':
+        print("Using residual 2TD learner")
+        agent = PixelSACResidualLearner2TD(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
+    else:
+        raise NotImplementedError(f"Unknown algorithm {variant.algorithm}, current supported algorithms are pixel_sac, pixel_sac_residual, pixel_sac_residual_2td")
     
     online_buffer_size = variant.max_steps  // variant.multi_grad_step
     online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size))

@@ -13,7 +13,7 @@ export CUDA_VISIBLE_DEVICES=$device_id
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
---algorithm pixel_sac \
+--algorithm pixel_sac_residual_2td \
 --env libero \
 --wandb_project ${proj_name} \
 --batch_size 256 \
@@ -37,4 +37,4 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --kl_coeff 1.0 \
 --qwarmup 1 \
 --max_timesteps 40 \
---use_res 0 \
+--use_res 1 \

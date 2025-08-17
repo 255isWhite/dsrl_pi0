@@ -76,6 +76,7 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             'mean_pi_ac_mean': mean_dist.mean(axis=-1),
             'std_pi_ac_mean': std_diag_dist.mean(axis=-1),
             'kl_loss': kl_loss,
+            'kl_coeff': kl_coeff,
         }
         return actor_loss, (things_to_log, new_model_state)
 
