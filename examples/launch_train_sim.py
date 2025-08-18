@@ -22,6 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--algorithm', default='pixel_sac', help='type of algorithm')
     parser.add_argument('--prefix', default='', help='prefix to use for wandb')
     parser.add_argument('--suffix', default='', help='suffix to use for wandb')
+    parser.add_argument('--label', default='', help='label to use for wandb')
     parser.add_argument('--multi_grad_step', default=1, help='Number of graident steps to take per environment step, aka UTD', type=int)
     parser.add_argument('--resize_image', default=-1, help='the size of image if need resizing', type=int)
     parser.add_argument('--query_freq', default=-1, help='query frequency', type=int)

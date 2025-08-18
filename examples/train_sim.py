@@ -85,6 +85,13 @@ def main(variant):
     print('batch size', variant.batch_size)
     print('task_id', variant.task_id)
     print('task_suite', variant.task_suite)
+
+    if variant.task_suite == "libero_10":
+        print("[INFO] libero_10 detected, setting max_timesteps = 600")
+        variant.max_timesteps = 600
+    else:
+        print(f"[INFO] Using default max_timesteps = {variant.max_timesteps}")
+
     # we shard the leading dimension (batch dimension) accross all devices evenly
     sharding = jax.sharding.PositionalSharding(devices)
     shard_fn = partial(shard_batch, sharding=sharding)
@@ -136,6 +143,7 @@ def main(variant):
 
     group_name = variant.prefix + '_' + variant.launch_group_id
     wandb_output_dir = tempfile.mkdtemp()
+    # variant.prefix = ''
     wandb_logger = WandBLogger(variant.prefix != '', variant, variant.wandb_project, experiment_id=expname, output_dir=wandb_output_dir, group_name=group_name)
 
     dummy_env = DummyEnv(variant)

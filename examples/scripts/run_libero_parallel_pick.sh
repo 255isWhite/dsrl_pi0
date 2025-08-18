@@ -10,27 +10,59 @@ proj_name="DSRL_pi0_Libero"
 #   "qwarmup=1,seed=43"
 # )
 
-gpu_list=(3 4 5 6)                          # 物理 GPU ID
+gpu_list=(0 1 2 3 4 5 6)                          # 物理 GPU ID
 ablations=(
-  "task_id=8,task_suite=libero_90"
-  "task_id=8,task_suite=libero_90,qwarmup=1"
-  "task_id=8,task_suite=libero_90,kl_coeff=1.0"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0"
+  # libero_spatial
+  "task_suite=libero_spatial,task_id=2"
+  "task_suite=libero_spatial,task_id=4"
+  "task_suite=libero_spatial,task_id=9"
 
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=10000"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=30000"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=100000"
+  # libero_object
+  "task_suite=libero_object,task_id=6"
+  "task_suite=libero_object,task_id=8"
+  "task_suite=libero_object,task_id=9"
 
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.1"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.2"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=0.5"
-  "task_id=8,task_suite=libero_90,qwarmup=1,kl_coeff=1.0,use_res=1,res_H=50000,res_coeff=1.0"
+  # libero_goal
+  "task_suite=libero_goal,task_id=4"
+  "task_suite=libero_goal,task_id=8"
+  "task_suite=libero_goal,task_id=9"
+
+  # libero_10
+  "task_suite=libero_10,task_id=2"
+  "task_suite=libero_10,task_id=6"
+  "task_suite=libero_10,task_id=7"
+  "task_suite=libero_10,task_id=9"
+
+  # libero_90
+  "task_suite=libero_90,task_id=2"
+  "task_suite=libero_90,task_id=8"
+  "task_suite=libero_90,task_id=9"
+  "task_suite=libero_90,task_id=12"
+  "task_suite=libero_90,task_id=14"
+  "task_suite=libero_90,task_id=15"
+  "task_suite=libero_90,task_id=16"
+  "task_suite=libero_90,task_id=18"
+  "task_suite=libero_90,task_id=19"
+  "task_suite=libero_90,task_id=21"
+  "task_suite=libero_90,task_id=23"
+  "task_suite=libero_90,task_id=26"
+  "task_suite=libero_90,task_id=27"
+  "task_suite=libero_90,task_id=30"
+  "task_suite=libero_90,task_id=32"
+  "task_suite=libero_90,task_id=34"
+  "task_suite=libero_90,task_id=41"
+  "task_suite=libero_90,task_id=48"
+  "task_suite=libero_90,task_id=50"
+  "task_suite=libero_90,task_id=52"
+  "task_suite=libero_90,task_id=53"
+  "task_suite=libero_90,task_id=54"
+  "task_suite=libero_90,task_id=56"
+  "task_suite=libero_90,task_id=58"
+  "task_suite=libero_90,task_id=59"
 )
 
-
 per_proc_cap_gb=12
-max_concurrency_per_gpu=3
+max_concurrency_per_gpu=6
 safety_gb=1
 sleep_between_launch=5
 check_interval=10
@@ -221,10 +253,11 @@ start_task_on_slot() {
       --env libero \
       --seed 42 \
       --prefix "${tag}" \
+      --label vanilla \
       --wandb_project ${proj_name} \
       --batch_size 256 \
       --discount 0.999 \
-      --max_steps 150000 \
+      --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
       --eval_episodes 10 \
@@ -239,8 +272,8 @@ start_task_on_slot() {
       --pi0_model /data/.zh1/pi0/libero130_1shot/20000/20000 \
       --pi0_config pi0_libero130_1shot \
       --eval_at_begin 1 \
-      --qwarmup 1 \
-      --kl_coeff 1.0 \
+      --qwarmup 0 \
+      --kl_coeff 0 \
       --max_timesteps 400 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
