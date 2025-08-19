@@ -167,24 +167,29 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                         for k, v in update_info.items():
                             if v.ndim == 0:
                                 wandb_logger.log({f'training/{k}': v}, step=i)
-                            elif v.ndim <= 2:
+                            elif v.ndim <= 2 and i%variant.media_log_interval == 0:
                                 wandb_logger.log_histogram(f'training/{k}', v, i)
+                            else:
+                                continue
                                 
                         res_update_info = {k: jax.device_get(v) for k, v in res_update_info.items()}
                         for k, v in res_update_info.items():
                             if v.ndim == 0:
                                 wandb_logger.log({f'residual/{k}': v}, step=i)
-                            elif v.ndim <= 2:
+                            elif v.ndim <= 2 and i%variant.media_log_interval == 0:
                                 wandb_logger.log_histogram(f'residual/{k}', v, i)
+                            else:
+                                continue
                             
                     if i % variant.eval_interval == 0:
                         wandb_logger.log({'num_online_samples': len(online_replay_buffer)}, step=i)
                         wandb_logger.log({'num_online_trajs': traj_id + 1}, step=i)
                         wandb_logger.log({'env_steps': total_env_steps}, step=i)
-                        if perform_control_evals:
-                            perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform)
-                        if hasattr(agent, 'perform_eval'):
-                            agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
+                        if i % variant.media_log_interval == 0:
+                            if perform_control_evals:
+                                perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform)
+                            if hasattr(agent, 'perform_eval'):
+                                agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
                     if variant.checkpoint_interval != -1 and i % variant.checkpoint_interval == 0:
                         agent.save_checkpoint(variant.outputdir, i, variant.checkpoint_interval)
@@ -453,8 +458,8 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
         success_rates.append(is_success)
                 
         print(f'Rollout {rollout_id} : {episode_return=}, Success: {is_success}')
-        video = np.stack(image_list).transpose(0, 3, 1, 2)
-        wandb_logger.log({f'eval_video/{rollout_id}': wandb.Video(video, fps=50, format='gif')}, step=i)
+        video = np.stack(image_list)[::2].transpose(0, 3, 1, 2) # downsample by 2 and change to (T, C, H, W) format
+        wandb_logger.log({f'eval_video/{rollout_id}': wandb.Video(video, fps=30, format='mp4')}, step=i)
 
 
     success_rate = np.mean(np.array(success_rates))

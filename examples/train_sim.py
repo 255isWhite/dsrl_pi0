@@ -17,6 +17,7 @@ import numpy as np
 import gymnasium as gym
 import gym_aloha
 from gym.spaces import Dict, Box
+from general_utils import *
 
 from libero.libero import benchmark
 from libero.libero import get_libero_path
@@ -91,6 +92,7 @@ def main(variant):
         variant.use_res = 1
     else:
         variant.use_res = 0
+    variant.media_log_interval = variant.media_log_fold * variant.log_interval
     # we shard the leading dimension (batch dimension) accross all devices evenly
     sharding = jax.sharding.PositionalSharding(devices)
     shard_fn = partial(shard_batch, sharding=sharding)
@@ -143,6 +145,7 @@ def main(variant):
         
 
     group_name = variant.prefix + '_' + variant.launch_group_id
+    group_name = safe_group_name(group_name, max_len=120)
     wandb_output_dir = tempfile.mkdtemp()
     wandb_logger = WandBLogger(variant.label != '', variant, variant.wandb_project, experiment_id=expname, output_dir=wandb_output_dir, group_name=group_name)
 

@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+unset CUDA_VISIBLE_DEVICES   
 
 # ===== 可配置 =====
 proj_name="DSRL_pi0_Libero"
@@ -12,34 +13,54 @@ proj_name="DSRL_pi0_Libero"
 
 gpu_list=(4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=2"
 
-  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
-  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
-  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
-  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
-  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
-  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=8"
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=4"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=4"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=4"
+  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=4"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=4"
+  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=4"
 
-  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=9"
+  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=9"
 
-  "res_H=10000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
-  "res_H=20000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
-  "res_H=30000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
-  "res_H=40000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
-  "res_H=50000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
-  "res_H=60000,res_coeff=0.1,decay_kl=1,label=2td_dkl,task_id=12"
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
+  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
+  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
 
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
+  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
+  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
+
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
+  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
+  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
+
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=2"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=4"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=9"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=6,task_suite=libero_object"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=8,task_suite=libero_object"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=9,task_suite=libero_object"
 )
 
 
@@ -234,7 +255,7 @@ start_task_on_slot() {
       --algorithm pixel_sac_residual_2td \
       --env libero \
       --seed 42 \
-      --prefix "${tag}" \
+      --prefix "${tag}_G${gpu_id}" \
       --wandb_project ${proj_name} \
       --batch_size 256 \
       --discount 0.999 \
@@ -249,12 +270,13 @@ start_task_on_slot() {
       --query_freq 20 \
       --hidden_dims 128 \
       --task_id 21 \
-      --task_suite libero_90 \
+      --task_suite libero_spatial \
       --pi0_model /mnt/ssd1/data/zh1/pi0/checkpoints/pi0_libero130_1shot/libero130_1shot/20000 \
       --pi0_config pi0_libero130_1shot \
       --eval_at_begin 1 \
       --qwarmup 1 \
-      --kl_coeff 1.0 \
+      --kl_coeff 0.0 \
+      --res_coeff 0.1 \
       --max_timesteps 400 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
