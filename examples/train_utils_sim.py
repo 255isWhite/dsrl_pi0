@@ -30,6 +30,8 @@ def obs_to_img(obs, variant):
     '''
     if variant.env == 'libero':
         curr_image = obs["agentview_image"][::-1, ::-1]
+    elif variant.env == 'robomimic':
+        curr_image = obs["agentview_image"]
     elif variant.env == 'aloha_cube':
         curr_image = obs["pixels"]["top"]
     else:
@@ -61,6 +63,27 @@ def obs_to_pi_zero_input(obs, variant):
                         ),
                         "prompt": str(variant.task_description),
                     }
+    elif variant.env == 'robomimic':
+        img = np.ascontiguousarray(obs["agentview_image"])
+        wrist_img = np.ascontiguousarray(obs["robot0_eye_in_hand_image"])
+        img = image_tools.convert_to_uint8(
+            image_tools.resize_with_pad(img, 224, 224)
+        )
+        wrist_img = image_tools.convert_to_uint8(
+            image_tools.resize_with_pad(wrist_img, 224, 224)
+        )
+        obs_pi_zero = {
+                        "observation/image": img,
+                        "observation/wrist_image": wrist_img,
+                        "observation/state": np.concatenate(
+                            (
+                                obs["robot0_eef_pos"],
+                                _quat2axisangle(obs["robot0_eef_quat"]),
+                                obs["robot0_gripper_qpos"],
+                            )
+                        ),
+                        "prompt": str(variant.task_description),
+                    }
     elif variant.env == 'aloha_cube':
         img = np.ascontiguousarray(obs["pixels"]["top"])
         img = image_tools.convert_to_uint8(
@@ -76,6 +99,14 @@ def obs_to_pi_zero_input(obs, variant):
 
 def obs_to_qpos(obs, variant):
     if variant.env == 'libero':
+        qpos = np.concatenate(
+            (
+                obs["robot0_eef_pos"],
+                _quat2axisangle(obs["robot0_eef_quat"]),
+                obs["robot0_gripper_qpos"],
+            )
+        )
+    elif variant.env == 'robomimic':
         qpos = np.concatenate(
             (
                 obs["robot0_eef_pos"],
@@ -242,6 +273,8 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     
     if 'libero' in variant.env:
         obs = env.reset()
+    elif 'robomimic' in variant.env:
+        obs = env.reset()
     elif 'aloha' in variant.env:
         obs, _ = env.reset()
     
@@ -314,6 +347,9 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         action_t = actions[t % query_frequency]
         if 'libero' in variant.env:
             obs, reward, done, _ = env.step(action_t)
+        elif 'robomimic' in variant.env:
+            obs, reward, done, _ = env.step(action_t)
+            done = env.is_success()['task']   
         elif 'aloha' in variant.env:
             obs, reward, terminated, truncated, _ = env.step(action_t)
             done = terminated or truncated
@@ -336,6 +372,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     # per episode
     rewards = np.array(rewards)
     episode_return = np.sum(rewards[rewards!=None])
+    #wbd
     is_success = (reward == env_max_reward)
     print(f'Rollout Done: {episode_return=}, Success: {is_success}')
     
@@ -382,6 +419,8 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
 
     for rollout_id in range(variant.eval_episodes):
         if 'libero' in variant.env:
+            obs = env.reset()
+        elif 'robomimic' in variant.env:
             obs = env.reset()
         elif 'aloha' in variant.env:
             obs, _ = env.reset()
@@ -438,6 +477,9 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
             
             if 'libero' in variant.env:
                 obs, reward, done, _ = env.step(action_t)
+            elif 'robomimic' in variant.env:
+                obs, reward, done, _ = env.step(action_t)
+                done = env.is_success()['task']   
             elif 'aloha' in variant.env:
                 obs, reward, terminated, truncated, _ = env.step(action_t)
                 done = terminated or truncated

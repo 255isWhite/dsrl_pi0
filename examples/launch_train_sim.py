@@ -25,8 +25,8 @@ if __name__ == '__main__':
     parser.add_argument('--multi_grad_step', default=1, help='Number of graident steps to take per environment step, aka UTD', type=int)
     parser.add_argument('--resize_image', default=-1, help='the size of image if need resizing', type=int)
     parser.add_argument('--query_freq', default=-1, help='query frequency', type=int)
-    parser.add_argument('--task_id', default=57, help='task id for libero environment', type=int)
-    parser.add_argument('--task_suite', default='libero_90', help='task suite for libero environment', type=str)
+    parser.add_argument('--task_id', default=-1, help='task id for libero environment', type=int)
+    parser.add_argument('--task_suite', default='lift', help='task suite for libero/robomimic environment', type=str)
     parser.add_argument('--pi0_model', default='pi0_libero', help='which pi0 model to use', type=str)
     parser.add_argument('--pi0_config', default='pi0_libero', help='which pi0 config to use', type=str)
     parser.add_argument('--eval_at_begin', default=1, help='whether to evaluate at the beginning of training', type=int)
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--action_magnitude', default=1.0, help='magnitude of actions', type=float)
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
-    
+    parser.add_argument('--dataset_root', default='', help='root directory for robomimic dataset', type=str)
     train_args_dict = dict(
         actor_lr=1e-4,
         critic_lr=3e-4,

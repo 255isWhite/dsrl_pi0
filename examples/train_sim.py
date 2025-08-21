@@ -38,6 +38,15 @@ from openpi.shared import download
 home_dir = os.environ['HOME']
 compilation_cache.initialize_cache(os.path.join(home_dir, 'jax_compilation_cache'))
 
+# robomimic task
+ROBOMIMIC_PROMPTS = {
+    "lift": "lift the small red cube",
+    "can": "place a coke can from a large bin into a smaller target bin",
+    "square": "pick a square nut and place it on a rod",
+    "tool_hang": "assemble a frame and hang a wrench on the hook",
+    # "transport": "use two robot arms to transfer a hammer from a closed container to a target bin",
+}
+
 def _get_libero_env(task, resolution, seed):
     """Initializes and returns the LIBERO environment, along with the task description."""
     task_description = task.language
@@ -71,6 +80,8 @@ class DummyEnv(gym.ObservationWrapper):
         obs_dict['pixels'] = Box(low=0, high=255, shape=self.image_shape, dtype=np.uint8)
         if variant.add_states:
             if variant.env == 'libero':
+                state_dim = 8
+            elif variant.env == 'robomimic':
                 state_dim = 8
             elif variant.env == 'aloha_cube':
                 state_dim = 14
@@ -130,6 +141,39 @@ def main(variant):
         eval_env = env
         variant.task_description = task_description
         variant.env_max_reward = 1
+    elif variant.env == 'robomimic':
+        from robomimic.utils.dataset import ObsUtils
+        import robomimic.utils.file_utils as FileUtils
+        import robomimic.utils.env_utils as EnvUtils
+        import pathlib as _pl
+
+        # 让 robomimic 用你需要的观测模态
+        ObsUtils.initialize_obs_modality_mapping_from_dict({
+            "low_dim": ["robot0_eef_pos", "robot0_eef_quat", "robot0_gripper_qpos", "object"],
+            "rgb": ["robot0_eye_in_hand_image", "agentview_image"],
+            "depth": [], "scan": [],
+        })
+
+        # dataset_root/task/ph/image.hdf5
+        ds_path = os.path.join(variant.dataset_root, variant.task_suite, "ph", "image.hdf5")
+        env_meta = FileUtils.get_env_metadata_from_dataset(dataset_path=ds_path)
+        # 常见：让 controller_configs.control_delta=True
+        try:
+            env_meta["env_kwargs"]["controller_configs"]["control_delta"] = True
+        except Exception:
+            pass
+
+        env = EnvUtils.create_env_from_metadata(
+            env_meta=env_meta,
+            env_name=env_meta["env_name"],
+            render=False,
+            render_offscreen=False,
+            use_image_obs=True,
+        )
+        eval_env = env
+        variant.task_description = ROBOMIMIC_PROMPTS.get(variant.task_suite, f"do task: {variant.task_suite}")
+        variant.env_max_reward = 1
+
     elif variant.env == 'aloha_cube':
         from gymnasium.envs.registration import register
         register(
@@ -158,6 +202,9 @@ def main(variant):
     model_path = variant.pi0_model
     config_name = variant.pi0_config
     if variant.env == 'libero':
+        config = openpi_config.get_config(config_name)
+        checkpoint_dir = download.maybe_download(model_path)
+    elif variant.env == 'robomimic':
         config = openpi_config.get_config(config_name)
         checkpoint_dir = download.maybe_download(model_path)
     else:

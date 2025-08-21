@@ -3,7 +3,7 @@ set -euo pipefail
 unset CUDA_VISIBLE_DEVICES   
 
 # ===== 可配置 =====
-proj_name="DSRL_pi0_Libero"
+proj_name="DSRL_pi0_Robomimic"
 # gpu_list=(2 3)                          # 物理 GPU ID
 
 # ablations=(
@@ -13,54 +13,35 @@ proj_name="DSRL_pi0_Libero"
 
 gpu_list=(0 1 2 3 4 5 6)                          # 物理 GPU ID
 ablations=(
-  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=2"
-  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=2"
+  "res_H=1000,decay_kl=1,label=2td_dkl,task_suite=lift"
+  "res_H=2000,decay_kl=1,label=2td_dkl,task_suite=lift"
+  "res_H=5000,decay_kl=1,label=2td_dkl,task_suite=lift"
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_suite=lift"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_suite=lift"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_suite=lift"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_suite=lift"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=lift"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=lift,seed=142"
 
-  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=4"
-  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=4"
-  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=4"
-  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=4"
-  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=4"
-  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=4"
+  "res_H=1000,decay_kl=1,label=2td_dkl,task_suite=square"
+  "res_H=2000,decay_kl=1,label=2td_dkl,task_suite=square"
+  "res_H=5000,decay_kl=1,label=2td_dkl,task_suite=square"
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_suite=square"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_suite=square"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_suite=square"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_suite=square"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=square"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=square,seed=142"
 
-  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=9"
-  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=9"
-
-  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
-  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
-  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
-  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
-  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
-  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=6,task_suite=libero_object"
-
-  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
-  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
-  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
-  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
-  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
-  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=8,task_suite=libero_object"
-
-  "res_H=10000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
-  "res_H=20000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
-  "res_H=30000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
-  "res_H=40000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
-  "res_H=50000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
-  "res_H=60000,decay_kl=1,label=2td_dkl,task_id=9,task_suite=libero_object"
-
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=2"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=4"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=9"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=6,task_suite=libero_object"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=8,task_suite=libero_object"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_id=9,task_suite=libero_object"
+  "res_H=1000,decay_kl=1,label=2td_dkl,task_suite=can"
+  "res_H=2000,decay_kl=1,label=2td_dkl,task_suite=can"
+  "res_H=5000,decay_kl=1,label=2td_dkl,task_suite=can"
+  "res_H=10000,decay_kl=1,label=2td_dkl,task_suite=can"
+  "res_H=20000,decay_kl=1,label=2td_dkl,task_suite=can"
+  "res_H=30000,decay_kl=1,label=2td_dkl,task_suite=can"
+  "res_H=50000,decay_kl=1,label=2td_dkl,task_suite=can"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=can"
+  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=can,seed=142"
 )
 
 
@@ -253,7 +234,7 @@ start_task_on_slot() {
     # 3) 用 exec 让当前 PID 直接变成 python（记录到的就是 python 的 PID）
     exec python3 examples/launch_train_sim.py \
       --algorithm pixel_sac_residual_2td \
-      --env libero \
+      --env robomimic \
       --seed 42 \
       --prefix "${tag}_G${gpu_id}" \
       --wandb_project ${proj_name} \
@@ -267,17 +248,15 @@ start_task_on_slot() {
       --start_online_updates 500 \
       --resize_image 64 \
       --action_magnitude 1.0 \
-      --query_freq 20 \
+      --query_freq 4 \
       --hidden_dims 128 \
-      --task_id 21 \
-      --task_suite libero_spatial \
       --pi0_model /data/.zh1/pi0/robomimic_5shot/29999 \
-      --pi0_config pi0_robomimic \
+      --pi0_config pi0_robomimic_5shot \
       --eval_at_begin 1 \
       --qwarmup 1 \
       --kl_coeff 0.0 \
       --res_coeff 0.1 \
-      --max_timesteps 400 \
+      --max_timesteps 200 \
       --dataset_root /data/.zh1/robomimic/env_hdf5 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
