@@ -17,7 +17,7 @@ import numpy as np
 import gymnasium as gym
 import gym_aloha
 from gym.spaces import Dict, Box
-from general_utils import *
+from custom_utils import *
 
 from libero.libero import benchmark
 from libero.libero import get_libero_path
@@ -73,6 +73,8 @@ class DummyEnv(gym.ObservationWrapper):
             if variant.env == 'libero':
                 state_dim = 8
             elif variant.env == 'aloha_cube':
+                state_dim = 14
+            elif variant.env == 'robotwin':
                 state_dim = 14
             obs_dict['state'] = Box(low=-1.0, high=1.0, shape=(state_dim, 1), dtype=np.float32)
         self.observation_space = Dict(obs_dict)
@@ -142,7 +144,10 @@ def main(variant):
         env = gym.make("gym_aloha/AlohaTransferCube-v0", obs_type="pixels_agent_pos", render_mode="rgb_array")
         eval_env = copy.deepcopy(env)
         variant.env_max_reward = 4
-        
+    elif variant.env == 'robotwin':
+        env = RoboTwinEnv(variant.task_suite, save_dir=variant.save_dir)
+        eval_env = env
+        variant.env_max_reward = 1
 
     group_name = variant.prefix + '_' + variant.launch_group_id
     group_name = safe_group_name(group_name, max_len=120)
@@ -157,7 +162,7 @@ def main(variant):
     
     model_path = variant.pi0_model
     config_name = variant.pi0_config
-    if variant.env == 'libero':
+    if variant.env == 'libero' or variant.env == 'robotwin':
         config = openpi_config.get_config(config_name)
         checkpoint_dir = download.maybe_download(model_path)
     else:

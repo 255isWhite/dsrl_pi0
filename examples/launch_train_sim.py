@@ -2,7 +2,9 @@ import argparse
 import sys
 from examples.train_sim import main
 from jaxrl2.utils.launch_util import parse_training_args
-from general_utils import *
+from custom_utils import dict_pretty_str
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -41,6 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--action_magnitude', default=1.0, help='magnitude of actions', type=float)
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
+    parser.add_argument('--save_dir', default='./videos', help='directory to save videos and logs', type=str)
     
     train_args_dict = dict(
         actor_lr=1e-4,

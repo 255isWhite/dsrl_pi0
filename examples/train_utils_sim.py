@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from openpi_client import image_tools
 import math
 import PIL
+from robotwin.description.utils.generate_episode_instructions import *
 
 def _quat2axisangle(quat):
     """
@@ -32,6 +33,8 @@ def obs_to_img(obs, variant):
         curr_image = obs["agentview_image"][::-1, ::-1]
     elif variant.env == 'aloha_cube':
         curr_image = obs["pixels"]["top"]
+    elif variant.env == 'robotwin':
+        curr_image = obs["observation"]["head_camera"]["rgb"]
     else:
         raise NotImplementedError()
     if variant.resize_image > 0: 
@@ -70,6 +73,35 @@ def obs_to_pi_zero_input(obs, variant):
             "state": obs["agent_pos"],
             "images": {"cam_high": np.transpose(img, (2,0,1))}
         }
+    elif variant.env == 'robotwin':
+        img_head = np.ascontiguousarray(obs["observation"]["head_camera"]["rgb"])
+        img_right = np.ascontiguousarray(obs["observation"]["right_camera"]["rgb"])
+        img_left = np.ascontiguousarray(obs["observation"]["left_camera"]["rgb"])
+        
+        img_head = image_tools.convert_to_uint8(
+            image_tools.resize_with_pad(img_head, 224, 224)
+        )
+        img_right = image_tools.convert_to_uint8(
+            image_tools.resize_with_pad(img_right, 224, 224)
+        )  
+        img_left = image_tools.convert_to_uint8(
+            image_tools.resize_with_pad(img_left, 224, 224)
+        )
+        
+        img_head = np.transpose(img_head, (2, 0, 1))
+        img_right = np.transpose(img_right, (2, 0, 1))
+        img_left = np.transpose(img_left, (2, 0, 1))
+        
+        obs_pi_zero = {
+            "images": {
+                "cam_high": img_head,
+                "cam_left_wrist": img_left,
+                "cam_right_wrist": img_right,
+            },
+            "state": obs["joint_action"]["vector"],
+            "prompt": str(variant.task_description),
+        }
+        
     else:
         raise NotImplementedError()
     return obs_pi_zero
@@ -85,6 +117,8 @@ def obs_to_qpos(obs, variant):
         )
     elif variant.env == 'aloha_cube':
         qpos = obs["agent_pos"]
+    elif variant.env == 'robotwin':
+        qpos = obs["joint_action"]["vector"]
     else:
         raise NotImplementedError()
     return qpos
@@ -100,8 +134,8 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
     wandb_logger.log({'num_online_samples': 0}, step=i)
     wandb_logger.log({'num_online_trajs': 0}, step=i)
     wandb_logger.log({'env_steps': 0}, step=i)
-    warmup_steps = variant.start_online_updates * variant.query_freq
-                            
+    warmup_steps = variant.start_online_updates * variant.query_freq        
+    
     with tqdm(total=variant.max_steps, initial=0) as pbar:
         while i <= variant.max_steps:
             if len(online_replay_buffer) <= variant.start_online_updates:
@@ -244,6 +278,9 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         obs = env.reset()
     elif 'aloha' in variant.env:
         obs, _ = env.reset()
+    elif 'robotwin' in variant.env:
+        obs, ins = env.reset()
+        variant.task_description = ins
     
     image_list = [] # for visualization
     rewards = []
@@ -273,6 +310,20 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             assert agent_dp is not None
             # we then use the noise to sample the action from diffusion model
             rng, key = jax.random.split(rng)
+            
+            if variant.env == 'robotwin':
+                obs = env.get_obs()
+                curr_image = obs_to_img(obs, variant)
+                qpos = obs_to_qpos(obs, variant)
+                if variant.add_states:
+                    obs_dict = {
+                        'pixels': curr_image[np.newaxis, ..., np.newaxis],
+                        'state': qpos[np.newaxis, ..., np.newaxis],
+                    }
+                else:
+                    obs_dict = {
+                        'pixels': curr_image[np.newaxis, ..., np.newaxis],
+                    }
             obs_pi_zero = obs_to_pi_zero_input(obs, variant)
             if i == 0:
                 # for initial round of data collection, we sample from standard gaussian noise
@@ -317,26 +368,43 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         elif 'aloha' in variant.env:
             obs, reward, terminated, truncated, _ = env.step(action_t)
             done = terminated or truncated
-            
+        elif 'robotwin' in variant.env:
+            _, done = env.step(action_t)
+            reward = 0.0 if not done else 1.0
+                        
         rewards.append(reward)
         image_list.append(curr_image)
         if done:
             break
 
     # add last observation
-    curr_image = obs_to_img(obs, variant)
-    qpos = obs_to_qpos(obs, variant)
-    obs_dict = {
-        'pixels': curr_image[np.newaxis, ..., np.newaxis],
-        'state': qpos[np.newaxis, ..., np.newaxis],
-    }
+    if variant.env == 'robotwin':
+        obs = env.get_obs()
+        curr_image = obs_to_img(obs, variant)
+        qpos = obs_to_qpos(obs, variant)
+        if variant.add_states:
+            obs_dict = {
+                'pixels': curr_image[np.newaxis, ..., np.newaxis],
+                'state': qpos[np.newaxis, ..., np.newaxis],
+            }
+        else:
+            obs_dict = {
+                'pixels': curr_image[np.newaxis, ..., np.newaxis],
+            }
+    else:
+        curr_image = obs_to_img(obs, variant)
+        qpos = obs_to_qpos(obs, variant)
+        obs_dict = {
+            'pixels': curr_image[np.newaxis, ..., np.newaxis],
+            'state': qpos[np.newaxis, ..., np.newaxis],
+        }
     obs_list.append(obs_dict)
     image_list.append(curr_image)
     
     # per episode
     rewards = np.array(rewards)
     episode_return = np.sum(rewards[rewards!=None])
-    is_success = (reward == env_max_reward)
+    is_success = done
     print(f'Rollout Done: {episode_return=}, Success: {is_success}')
     
     
@@ -385,6 +453,9 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
             obs = env.reset()
         elif 'aloha' in variant.env:
             obs, _ = env.reset()
+        elif 'robotwin' in variant.env:
+            obs, ins = env.reset()
+            variant.task_description = ins
             
         image_list = [] # for visualization
         rewards = []
@@ -394,6 +465,10 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
             curr_image = obs_to_img(obs, variant)
 
             if t % query_frequency == 0:
+                if variant.env == 'robotwin':
+                    obs = env.get_obs()
+                    curr_image = obs_to_img(obs, variant)
+
                 qpos = obs_to_qpos(obs, variant)
                 if variant.add_states:
                     obs_dict = {
@@ -441,6 +516,9 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
             elif 'aloha' in variant.env:
                 obs, reward, terminated, truncated, _ = env.step(action_t)
                 done = terminated or truncated
+            elif 'robotwin' in variant.env:
+                _, done = env.step(action_t)
+                reward = 0.0 if not done else 1.0
                 
             rewards.append(reward)
             image_list.append(curr_image)
@@ -454,7 +532,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
         episode_returns.append(episode_return)
         episode_highest_reward = np.max(rewards)
         highest_rewards.append(episode_highest_reward)
-        is_success = (reward == env_max_reward)
+        is_success = done
         success_rates.append(is_success)
                 
         print(f'Rollout {rollout_id} : {episode_return=}, Success: {is_success}')
