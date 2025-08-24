@@ -95,6 +95,8 @@ def main(variant):
     else:
         variant.use_res = 0
     variant.media_log_interval = variant.media_log_fold * variant.log_interval
+    variant.multi_grad_step = variant.query_freq
+    
     # we shard the leading dimension (batch dimension) accross all devices evenly
     sharding = jax.sharding.PositionalSharding(devices)
     shard_fn = partial(shard_batch, sharding=sharding)
@@ -145,12 +147,13 @@ def main(variant):
         eval_env = copy.deepcopy(env)
         variant.env_max_reward = 4
     elif variant.env == 'robotwin':
-        env = RoboTwinEnv(variant.task_suite, save_dir=variant.save_dir)
+        env = ClientEnv(variant.client_addr)
         eval_env = env
         variant.env_max_reward = 1
 
     group_name = variant.prefix + '_' + variant.launch_group_id
     group_name = safe_group_name(group_name, max_len=120)
+    expname = safe_group_name(expname, max_len=120)
     wandb_output_dir = tempfile.mkdtemp()
     wandb_logger = WandBLogger(variant.label != '', variant, variant.wandb_project, experiment_id=expname, output_dir=wandb_output_dir, group_name=group_name)
 

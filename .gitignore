@@ -135,3 +135,4 @@ openpi/
 *back[0-9]*.sh
 *back.sh
 robotwin_log/
+envx_log/

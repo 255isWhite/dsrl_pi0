@@ -26,7 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--suffix', default='', help='suffix to use for wandb')
     parser.add_argument('--multi_grad_step', default=1, help='Number of graident steps to take per environment step, aka UTD', type=int)
     parser.add_argument('--resize_image', default=-1, help='the size of image if need resizing', type=int)
-    parser.add_argument('--query_freq', default=-1, help='query frequency', type=int)
+    parser.add_argument('--query_freq', default=1, help='query frequency', type=int)
     parser.add_argument('--task_id', default=57, help='task id for libero environment', type=int)
     parser.add_argument('--task_suite', default='libero_90', help='task suite for libero environment', type=str)
     parser.add_argument('--pi0_model', default='pi0_libero', help='which pi0 model to use', type=str)
@@ -44,6 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
     parser.add_argument('--save_dir', default='./videos', help='directory to save videos and logs', type=str)
+    parser.add_argument('--client_addr', default='localhost:8080', help='address for robotwin client', type=str)
     
     train_args_dict = dict(
         actor_lr=1e-4,

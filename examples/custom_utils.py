@@ -24,6 +24,8 @@ from datetime import datetime
 from datetime import timedelta
 import pytz
 import time
+import zmq
+import pickle
 
 def get_beijing_time():
     beijing_tz = pytz.timezone('Asia/Shanghai') 
@@ -199,9 +201,6 @@ class RoboTwinEnv:
     def reset(self):        
         print(f"millisecons to last reset: {(time.time() - self.start_time) * 1000:.2f} ms")
         self.start_time = time.time()
-        
-        
-        
         results = generate_episode_descriptions(self.task_name, self.episode_info_list, 1)
         instruction = np.random.choice(results[0]["unseen"])
         self.env.set_instruction(instruction=instruction)  # set language instruction
@@ -213,4 +212,69 @@ class RoboTwinEnv:
         
         print(f"reset spend time: {(time.time() - self.start_time) * 1000:.2f} ms")
         
+        return obs, instruction
+    
+# ============ Client ==============
+class ClientEnv:
+    def __init__(self, full_address: str, **kwargs):
+        self.full_address = full_address
+        host, port = full_address.split(':')
+        port = int(port)
+        ctx = zmq.Context()
+        self.socket = ctx.socket(zmq.REQ)
+        self.socket.connect(f"tcp://{host}:{port}")
+        print(f"[Client] Connected to {full_address}")
+
+    def _print_obs(self, obs):
+        if isinstance(obs, dict):
+            for k, v in obs.items():
+                if isinstance(v, np.ndarray):
+                    print(f"    [Obs] {k}: shape={v.shape}, dtype={v.dtype}")
+                elif isinstance(v, dict):
+                    print(f"    [Obs] {k}: (dict)")
+                    self._print_obs(v)  # 递归打印
+                else:
+                    print(f"    [Obs] {k}: type={type(v)}, value={str(v)[:50]}")
+        else:
+            print(f"    [Obs] type={type(obs)}, value={str(obs)[:50]}")
+
+    def step(self, action):
+        fake_message = {'command': 'step', 'action': action}
+        t0 = time.time() * 1000
+        # print(f"[Client] Sending step action len={len(action)}")
+        self.socket.send(pickle.dumps(fake_message))
+        message = self.socket.recv()
+        t1 = time.time() * 1000
+        data = pickle.loads(message)
+        # print(f"[Client] Got step reply keys={list(data.keys())}, 往返耗时={t1 - t0:.2f} ms")
+        # if "obs" in data:
+        #     self._print_obs(data["obs"])
+        done = data.get('done')
+        return data.get("obs"), done
+
+    def get_obs(self):
+        fake_message = {'command': 'get_obs'}
+        t0 = time.time() * 1000
+        # print(f"[Client] Sending get_obs")
+        self.socket.send(pickle.dumps(fake_message))
+        message = self.socket.recv()
+        t1 = time.time() * 1000
+        data = pickle.loads(message)
+        obs = data.get('obs')
+        # print(f"[Client] Got obs, 往返耗时={t1 - t0:.2f} ms")
+        # self._print_obs(obs)
+        return obs
+
+    def reset(self):
+        fake_message = {'command': 'reset'}
+        t0 = time.time() * 1000
+        # print(f"[Client] Sending reset")
+        self.socket.send(pickle.dumps(fake_message))
+        message = self.socket.recv()
+        t1 = time.time() * 1000
+        data = pickle.loads(message)
+        obs = data.get('obs')
+        instruction = data.get('instruction')
+        # print(f"[Client] Reset reply: instruction={instruction}, 往返耗时={t1 - t0:.2f} ms")
+        # self._print_obs(obs)
         return obs, instruction

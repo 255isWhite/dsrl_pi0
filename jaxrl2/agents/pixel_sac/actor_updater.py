@@ -51,11 +51,16 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         actor_loss = (log_probs * temp.apply_fn({'params': temp.params}) - q).mean()
         
         # a. KL only MU
-        kl_loss = jnp.mean(jnp.square(means))
+        # kl_loss = jnp.mean(jnp.square(means))
         
         # b. KL MU and STD
         # stds = jnp.exp(log_stds)
         # kl_loss = 0.5 * jnp.mean(stds**2 + means**2 - 1.0 - 2.0 * log_stds)
+        
+        # c. KL Gaussian
+        tar_norm = actions.shape[-1]
+        ac_norm = jnp.linalg.norm(actions, axis=-1)  # [batch]
+        kl_loss = jnp.mean(0.5 * ac_norm**2 - (tar_norm - 1) * jnp.log(ac_norm + 1e-8))
         
         actor_loss = actor_loss + kl_loss * kl_coeff
 
@@ -73,9 +78,14 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             'std_pi_min': std_diag_dist.min(),
             'mean_pi_batch_mean': mean_dist.mean(axis=0),
             'std_pi_batch_mean': std_diag_dist.mean(axis=0),
-            'mean_pi_ac_mean': mean_dist.mean(axis=-1),
-            'std_pi_ac_mean': std_diag_dist.mean(axis=-1),
+            # 'mean_pi_ac_mean': mean_dist.mean(axis=-1),
+            # 'std_pi_ac_mean': std_diag_dist.mean(axis=-1),
             'kl_loss': kl_loss,
+            'ac_norm_avg': ac_norm.mean(),
+            'ac_norm_max': ac_norm.max(),
+            'ac_norm_min': ac_norm.min(),
+            'ac_norm_std': ac_norm.std(),
+            'tar_norm': jnp.sqrt(tar_norm-1),
         }
         return actor_loss, (things_to_log, new_model_state)
 
