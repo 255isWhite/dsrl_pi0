@@ -220,7 +220,7 @@ class PixelSACResidualLearner2TD(Agent):
 
         self.action_dim = np.prod(actions.shape[-2:])
         self.action_chunk_shape = actions.shape[-2:]
-        self.magic_dim = 7
+        self.magic_dim = 14
 
         self.tau = tau
         self.discount = discount

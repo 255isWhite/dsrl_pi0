@@ -6,7 +6,7 @@ unset CUDA_VISIBLE_DEVICES
 proj_name="DSRL_pi0_Robotwin"
 # gpu_list=(2 3)                          # 物理 GPU ID
 
-gpu_list=(0 1 2 3 4 5 6)                          # 物理 GPU ID
+gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
   "res_H=5000,label=gas_ball,task_suite=lift_pot,max_timesteps=200"
   "res_H=20000,label=gas_ball,task_suite=lift_pot,max_timesteps=200"
@@ -28,20 +28,20 @@ ablations=(
   # "res_H=60000,label=gas_ball,task_suite=shake_bottle,max_timesteps=300"
   # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=shake_bottle,max_timesteps=300"
 
-  "res_H=5000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
-  "res_H=20000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
-  "res_H=60000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=handover_mic,max_timesteps=300"
+  # "res_H=5000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
+  # "res_H=20000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
+  # "res_H=60000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
+  # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=handover_mic,max_timesteps=300"
 
   # "res_H=5000,label=gas_ball,task_suite=open_laptop,max_timesteps=400"
   # "res_H=20000,label=gas_ball,task_suite=open_laptop,max_timesteps=400"
   # "res_H=60000,label=gas_ball,task_suite=open_laptop,max_timesteps=400"
   # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=open_laptop,max_timesteps=400"
 
-  "res_H=5000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
-  "res_H=20000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
-  "res_H=60000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=stack_bowls_two,max_timesteps=400"
+  # "res_H=5000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
+  # "res_H=20000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
+  # "res_H=60000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
+  # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=stack_bowls_two,max_timesteps=400"
 )
 host=localhost
 base_port=11451   # 起始端口

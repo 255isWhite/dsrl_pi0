@@ -22,13 +22,17 @@ import cv2
 import json
 import torch
 import random
+from collections import deque
 B_ROOT = Path(robotwin.__file__).parent
+
+def get_safe_timestamp():
+	return datetime.now().strftime("%Y%m%d_%H%M%S_%f") + f"_pid{os.getpid()}"
 
 def get_beijing_time():
 	# beijing_tz = pytz.timezone('Asia/Shanghai') 
 	now_utc = datetime.now().replace(tzinfo=pytz.utc)
 	# now_beijing = now_utc.astimezone(beijing_tz)
-	current_time = now_utc.strftime('%m_%d_%H_%M_%S')
+	current_time = now_utc.strftime('%m_%d_%H_%M_%S_%f')
 	return current_time
 
 def run_in_robotwin(func):
@@ -126,18 +130,18 @@ class RoboTwinEnv:
 	@run_in_robotwin
 	def __init__(self, task_name: str, **kwargs):
 		self.env, self.env_config = create_robotwin_env(task_name)
-		self.save_dir = kwargs.get("save_dir", None)
-		current_time = get_beijing_time()
-		save_dir = Path(f"{self.save_dir}/{current_time}/log")
-		save_dir.mkdir(parents=True, exist_ok=True)
-		
+  
+		current_time = get_safe_timestamp()
+		self.save_dir = kwargs.get("save_dir", "./robotwin_log")
+		self.save_json = Path(f"{self.save_dir}/{current_time}/result.json")
 		video_dir = Path(f"{self.save_dir}/{current_time}/video")
+		video_dir.mkdir(parents=True, exist_ok=True)
+
 		from robotwin import task_config
 		camera_config = task_config.load("_camera_config")
 		camera_config = camera_config[self.env_config["camera"]["head_camera_type"]]
 		
 		self.video_size = str(camera_config["w"]) + "x" + str(camera_config["h"])
-		video_dir.mkdir(parents=True, exist_ok=True)
 		self.env_config['eval_video_save_dir'] = video_dir
 
 		self.env.setup_demo(**self.env_config)
@@ -151,6 +155,7 @@ class RoboTwinEnv:
 		self.current_success = 0.0
 		self.real_ep_count = 0
 		self.current_video_name = None
+		self.recent_results = deque(maxlen=10)
 	
 		
 	def set_video_ffmpeg(self):
@@ -203,11 +208,26 @@ class RoboTwinEnv:
 		self.env.set_instruction(instruction=instruction)  # set language instruction
 		self.env.setup_demo(**self.env_config)
 		self.env._del_eval_video_ffmpeg()
+	
+		# 保存上一个episode结果
 		if self.real_ep_count > 0:
-			if self.current_success:
-				os.rename(self.current_video_name, self.current_video_name.replace(".mp4", "_success.mp4"))
-			else:
-				os.rename(self.current_video_name, self.current_video_name.replace(".mp4", "_fail.mp4"))
+			success_flag = bool(self.current_success)
+			new_name = self.current_video_name.replace(".mp4", "_success.mp4" if success_flag else "_fail.mp4")
+			os.rename(self.current_video_name, new_name)
+
+			# 更新统计
+			self.recent_results.append(1 if success_flag else 0)
+
+			# 写一行json
+			result_line = {
+				"task": self.task_name,
+				"episode": self.real_ep_count,
+				"success": success_flag,
+				"window_avg_success_rate": 100.0 * sum(self.recent_results) / len(self.recent_results),
+			}
+			with open(self.save_json, "a") as f:
+				f.write(json.dumps(result_line, ensure_ascii=False) + "\n")
+
 				
 		self.set_video_ffmpeg()  # reset video ffmpeg
 		obs = self.env.get_obs()
@@ -277,6 +297,7 @@ if __name__ == "__main__":
 	parser.add_argument('--save_dir', type=str, default='./robotwin_log')
 	parser.add_argument('--seed', type=int, default=42)
 	args = parser.parse_args()
+	print(f"gpu id: {args.gpu_id}")
 
 	full_address = f"{args.host}:{args.port}"
 	os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
