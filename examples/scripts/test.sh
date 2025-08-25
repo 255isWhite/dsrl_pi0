@@ -10,7 +10,8 @@ export MUJOCO_EGL_DEVICE_ID=$device_id
 export OPENPI_DATA_HOME=./openpi
 export EXP=./logs/test/$proj_name
 export CUDA_VISIBLE_DEVICES=$device_id
-export XLA_PYTHON_CLIENT_PREALLOCATE=false
+export XLA_PYTHON_CLIENT_PREALLOCATE=true
+export XLA_PYTHON_CLIENT_MEM_FRACTION=0.15
 
 JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --algorithm pixel_sac_residual_2td \
@@ -24,7 +25,7 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --log_interval 500 \
 --eval_episodes 1 \
 --multi_grad_step 20 \
---start_online_updates 500 \
+--start_online_updates 2 \
 --resize_image 64 \
 --action_magnitude 1.0 \
 --query_freq 20 \
