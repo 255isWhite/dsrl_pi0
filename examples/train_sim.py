@@ -77,6 +77,7 @@ class DummyEnv(gym.ObservationWrapper):
             obs_dict['state'] = Box(low=-1.0, high=1.0, shape=(state_dim, 1), dtype=np.float32)
         self.observation_space = Dict(obs_dict)
         self.action_space = Box(low=-1, high=1, shape=(1, 32,), dtype=np.float32) # 32 is the noise action space of pi 0
+        self.time_space = Box(low=0, high=variant.denoise_steps-1, shape=(1,), dtype=np.int32)
 
 
 def main(variant):
@@ -152,23 +153,14 @@ def main(variant):
     dummy_env = DummyEnv(variant)
     sample_obs = add_batch_dim(dummy_env.observation_space.sample())
     sample_action = add_batch_dim(dummy_env.action_space.sample())
+    sample_times = add_batch_dim(dummy_env.time_space.sample())
     print('sample obs shapes', [(k, v.shape) for k, v in sample_obs.items()])
     print('sample action shape', sample_action.shape)
-    
-    model_path = variant.pi0_model
-    config_name = variant.pi0_config
-    if variant.env == 'libero':
-        config = openpi_config.get_config(config_name)
-        checkpoint_dir = download.maybe_download(model_path)
-    else:
-        raise NotImplementedError()
-    agent_dp, dp_unnorm_transform = policy_config.create_trained_policy(config, checkpoint_dir)
-    print("Loaded pi0 policy from %s", checkpoint_dir)
-    
+    print('sample times shape', sample_times.shape)
 
     if variant.algorithm == 'pixel_sac':
         print("Using pixel sac learner")
-        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl ,**kwargs)
+        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, sample_times, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl , task_prompt=variant.task_description, **kwargs)
     elif variant.algorithm == 'pixel_sac_residual':
         print("Using residual learner")
         agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
@@ -178,8 +170,24 @@ def main(variant):
     else:
         raise NotImplementedError(f"Unknown algorithm {variant.algorithm}, current supported algorithms are pixel_sac, pixel_sac_residual, pixel_sac_residual_2td")
     
+    print(f"Agent {variant.algorithm} initialized fine.")
+    
+    model_path = variant.pi0_model
+    config_name = variant.pi0_config
+    if variant.env == 'libero':
+        config = openpi_config.get_config(config_name)
+        checkpoint_dir = download.maybe_download(model_path)
+    else:
+        raise NotImplementedError()
+    agent_dp, dp_unnorm_transform, pi0_params, pi0_def = policy_config.create_trained_policy(config, checkpoint_dir, guidance=agent._critic, \
+        guidance_scale=variant.guidance_scale, denoise_steps=variant.denoise_steps)
+    print("Loaded pi0 policy from %s", checkpoint_dir)
+    
+    agent.init_pi0_def(pi0_def)
+    
     online_buffer_size = variant.max_steps  // variant.multi_grad_step
-    online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size))
+    online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size), \
+        pi0_input_transform=agent_dp._input_transform, pi0_prompt=variant.task_description)
     replay_buffer = online_replay_buffer
     replay_buffer.seed(variant.seed)
-    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin, dp_unnorm_transform=dp_unnorm_transform)
+    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin, dp_unnorm_transform=dp_unnorm_transform, pi0_params=pi0_params, pi0_def=pi0_def)

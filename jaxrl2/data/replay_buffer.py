@@ -5,7 +5,7 @@ import gym
 import gym.spaces
 import numpy as np
 import pickle
-
+import jax.numpy as jnp
 import copy
 
 from jaxrl2.data.dataset import Dataset, DatasetDict
@@ -27,11 +27,13 @@ def _init_replay_dict(obs_space: gym.Space,
 
 class ReplayBuffer(Dataset):
     
-    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, ):
+    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, pi0_input_transform=None, pi0_prompt=None):
         self.observation_space = observation_space
         self.action_space = action_space
         self.capacity = capacity
         self.magic_shape = (self.action_space.shape[0], 7)
+        self.pi0_input_transform = pi0_input_transform
+        self.pi0_prompt = pi0_prompt
 
         print("making replay buffer of capacity ", self.capacity)
 
@@ -66,6 +68,13 @@ class ReplayBuffer(Dataset):
         self._start = 0
         self.traj_bounds = dict()
         self.streaming_buffer_size = None # this is for streaming the online data
+        
+        self.data['pi_zero_obs'] = {
+            "observation/image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
+            "observation/wrist_image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
+            "observation/state": np.empty((self.capacity, 8), dtype=np.float32),
+        }
+        
 
     def __len__(self) -> int:
         return self.size
@@ -131,7 +140,7 @@ class ReplayBuffer(Dataset):
         }
         return batch
         
-    def insert(self, data_dict: DatasetDict):
+    def insert(self, data_dict: DatasetDict, pi_zero_obs_dict=None):
         if self.size == self.capacity:
             # Double the capacity
             observations = _init_replay_dict(self.observation_space, self.capacity)
@@ -168,6 +177,15 @@ class ReplayBuffer(Dataset):
                         self.data[x][y] = np.concatenate((self.data[x][y], data_new[x][y]), axis=0)
                 else:
                     raise TypeError()
+            pi_zero_obs_new = {
+                "observation/image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
+                "observation/wrist_image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
+                "observation/state": np.empty((self.capacity, 8), dtype=np.float32),
+            }
+            for k in self.data['pi_zero_obs']:
+                self.data['pi_zero_obs'][k] = np.concatenate(
+                    (self.data['pi_zero_obs'][k], pi_zero_obs_new[k]), axis=0
+                )
             self.capacity *= 2
 
 
@@ -178,6 +196,12 @@ class ReplayBuffer(Dataset):
                         self.data[x][y][self.size] = data_dict[x][y]
                 else:                        
                     self.data[x][self.size] = data_dict[x]
+                    
+        if pi_zero_obs_dict is not None:
+            self.data['pi_zero_obs']["observation/image"][self.size] = pi_zero_obs_dict["observation/image"]
+            self.data['pi_zero_obs']["observation/wrist_image"][self.size] = pi_zero_obs_dict["observation/wrist_image"]
+            self.data['pi_zero_obs']["observation/state"][self.size] = pi_zero_obs_dict["observation/state"]
+
         self.size += 1
     
     def compute_action_stats(self):
@@ -205,6 +229,29 @@ class ReplayBuffer(Dataset):
                 data_dict[x] = {}
                 for y in self.data[x]:
                     data_dict[x][y] = self.data[x][y][indices]
+                if x == 'pi_zero_obs' and self.pi0_input_transform is not None:
+                    data_dict[x]["prompt"] = self.pi0_prompt
+                    # print(f"before transform, keys are {data_dict[x].keys()}")
+                    data_dict[x] = self.pi0_input_transform(data_dict[x])
+                    # print(f"after transform, keys are {data_dict[x].keys()}")
+                    
+                    # Make a batch and convert to jax.Array.
+                    if data_dict[x]["state"].ndim > 1:
+                        batch_size = data_dict[x]["state"].shape[0]
+                        def _add_batch_dim(x):
+                            return jnp.broadcast_to(
+                                x[jnp.newaxis, ...],
+                                (batch_size,) + x.shape
+                            )
+                            
+                        data_dict[x] = jax.tree.map(lambda x: jnp.asarray(x), data_dict[x])
+                        for key in data_dict[x]:
+                            if key not in ["image", "state"]:
+                                data_dict[x][key] = jax.tree.map(lambda x: _add_batch_dim(x), data_dict[x][key])
+                    else:
+                        batch_size = 1
+                        data_dict[x] = jax.tree.map(lambda x: jnp.asarray(x)[np.newaxis, ...], data_dict[x])
+            
             else:
                 raise TypeError()
         

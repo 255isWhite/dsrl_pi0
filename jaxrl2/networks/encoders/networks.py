@@ -41,11 +41,14 @@ class PixelMultiplexer(nn.Module):
     network: nn.Module
     latent_dim: int
     use_bottleneck: bool=True
+    denoise_steps: int=10
+    time_dim: int=8
 
     @nn.compact
     def __call__(self,
                  observations: Union[FrozenDict, Dict],
                  actions: Optional[jnp.ndarray] = None,
+                 times: Optional[jnp.ndarray] = None,
                  training: bool = False):
         observations = FrozenDict(observations)
 
@@ -55,10 +58,30 @@ class PixelMultiplexer(nn.Module):
             x = nn.LayerNorm()(x)
             x = nn.tanh(x)
 
-        x = observations.copy(add_or_replace={'pixels': x})
+        obs = observations.copy(add_or_replace={'pixels': x})
+            
+        # ---- Add time embedding ----
+        # TBC
+        if times is None:
+            # 从 pixels 里推 batch size
+            B = observations['pixels'].shape[0]
+            times = jnp.zeros((B, 1), dtype=jnp.int32)  # shape [B, 1]
+        
+        # embedding lookup
+        t_emb = nn.Embed(num_embeddings=self.denoise_steps+1, features=self.time_dim)(
+            times.astype(jnp.int32)
+        )
+        obs = obs.copy(add_or_replace={'time': t_emb})
+
+        # # print key and shape of obs
+        # for k, v in obs.items():
+        #     print(f"key: {k}, shape: {v.shape}")
+        # # action
+        # if actions is not None:
+        #     print(f"action shape: {actions.shape}")
 
         # print('fully connected keys', x.keys())
         if actions is None:
-            return self.network(x, training=training)
+            return self.network(obs, training=training)
         else:
-            return self.network(x, actions, training=training)
+            return self.network(obs, actions, training=training)

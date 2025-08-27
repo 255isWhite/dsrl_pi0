@@ -41,6 +41,8 @@ if __name__ == '__main__':
     parser.add_argument('--action_magnitude', default=1.0, help='magnitude of actions', type=float)
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
+    parser.add_argument('--guidance_scale', default=1.0, help='guidance scale for pi0 policy', type=float)
+    parser.add_argument('--denoise_steps', default=10, help='number of diffusion steps for pi0 policy', type=int)
     
     train_args_dict = dict(
         actor_lr=1e-4,

@@ -1,6 +1,6 @@
 #!/bin/bash
 proj_name=DSRL_test
-device_id=0
+device_id=1
 
 export DISPLAY=:0
 export MUJOCO_GL=egl
