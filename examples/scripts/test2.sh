@@ -1,6 +1,6 @@
 #!/bin/bash
 proj_name=DSRL_test
-device_id=0
+device_id=2
 
 export DISPLAY=:0
 export MUJOCO_GL=egl
@@ -18,7 +18,7 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --algorithm pixel_sac \
 --env libero \
 --wandb_project ${proj_name} \
---batch_size 8 \
+--batch_size 1 \
 --discount 0.999 \
 --seed 0 \
 --max_steps 500000  \

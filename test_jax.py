@@ -1,51 +1,59 @@
 import time
 import jax
 import jax.numpy as jnp
-import functools
+import numpy as np
+from jax import random
+from flax import linen as nn
 
-# 假设这是一个大对象（比如 3B 模型 wrapper）
-class DummyBigModel:
-    def __init__(self, size=10**7):
-        # 模拟巨大的 Python 对象
-        self.data = list(range(size))
+# ----------------------------
+# 定义一个简单的 MLP 模型
+# ----------------------------
+class BigMLP(nn.Module):
+    hidden_dim: int = 1024
+    out_dim: int = 256
+    depth: int = 4
 
-    def apply(self, params, x):
-        # 其实只依赖 params，不依赖 self.data
-        return x * params
+    @nn.compact
+    def __call__(self, x):
+        for _ in range(self.depth):
+            x = nn.Dense(self.hidden_dim)(x)
+            x = nn.relu(x)
+        x = nn.Dense(self.out_dim)(x)
+        return x
 
+# ----------------------------
+# 初始化模型参数
+# ----------------------------
+key = random.PRNGKey(0)
+model = BigMLP()
+dummy_input = jnp.ones((1, 512))  # 单条样本输入
+params = model.init(key, dummy_input)
 
-# ---------------------
-# 情况 1: 把 big_model 放进 static_argnames
-# ---------------------
-@functools.partial(jax.jit, static_argnames=("big_model",))
-def fn_static(x, params, big_model):
-    return big_model.apply(params, x)
+# jit 编译的 forward
+@jax.jit
+def forward(params, x):
+    return model.apply(params, x)
 
+# ----------------------------
+# 定义计时函数
+# ----------------------------
+def benchmark(batch_size, n_iter=50, warmup=10):
+    x = jnp.ones((batch_size, 512))
+    # warmup（避免编译影响）
+    for _ in range(warmup):
+        _ = forward(params, x).block_until_ready()
 
-# ---------------------
-# 情况 2: 把 big_model 固定在闭包，只传 params
-# ---------------------
-def make_fn_nostatic(big_model):
-    @jax.jit
-    def fn(x, params):
-        return big_model.apply(params, x)
-    return fn
+    start = time.time()
+    for _ in range(n_iter):
+        _ = forward(params, x).block_until_ready()
+    end = time.time()
 
+    avg = (end - start) / n_iter
+    return avg
 
-# ---------------------
+# ----------------------------
 # 运行对比
-# ---------------------
-x = jnp.ones((1000,))
-params = 2.0
-big_model = DummyBigModel(size=10**6)  # 模拟一个比较大的对象
-
-# 1. static_argnames 包含大对象
-t0 = time.time()
-y1 = fn_static(x, params, big_model).block_until_ready()
-print("with static_argnames big_model: {:.3f}s".format(time.time() - t0))
-
-# 2. 只传 params，不把大对象放进 jit
-fn_nostatic = make_fn_nostatic(big_model)
-t0 = time.time()
-y2 = fn_nostatic(x, params).block_until_ready()
-print("without static_argnames big_model: {:.3f}s".format(time.time() - t0))
+# ----------------------------
+for B in [1, 16, 64, 128, 256, 512]:
+    t = benchmark(B)
+    print(f"Batch {B:3d}: {t*1000:.3f} ms (per sample: {t*1000/B:.3f} ms)")

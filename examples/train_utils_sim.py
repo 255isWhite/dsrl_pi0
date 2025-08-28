@@ -110,7 +110,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
             else:
                 res_prob = (i-warmup_steps)/ variant.res_H if i <= (variant.res_H + warmup_steps) else 1.0
                 
-            if i < variant.res_H:
+            if i <= variant.res_H:
                 use_guidance = False
             else:
                 use_guidance = True
@@ -149,9 +149,9 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                     batch = next(replay_buffer_iterator)
                     
                     # noise&&clean space Critic & Actor updates
-                    # update_info = agent.update_with_inference(batch, pi0_params)
+                    update_info = agent.update_with_inference(batch, pi0_params)
                     
-                    update_info = agent.update_wo_inference(batch)
+                    # update_info = agent.update_wo_inference(batch)
                     # print(f"mid_loss: {update_info['mid_loss']}, critic_loss: {update_info['critic_loss']}")
                     
                     # if False:

@@ -99,13 +99,13 @@ def update_critic_with_inference(
     )
 
     # === Pi0 guidance ===
-    next_clean_actions = pi0_model.sample_actions_train(
+    next_clean_actions, next_middle_actions = jax.lax.stop_gradient(pi0_model.sample_actions_w_guidance_train(
         {**batch["next_pi_zero_obs"], "prompt": task_prompt},
         noise=noise,   # 预先生成，避免 trace 时插入 rng op
         guidance={"apply_fn": target_critic.apply_fn, "params": critic.params},
         guidance_obs=batch['observations'],
         guidance_scale=guidance_scale,
-    )
+    ))
 
     # 2. target critic
     next_qs = target_critic.apply_fn({'params': target_critic.params}, batch['next_observations'], next_clean_actions)
@@ -140,7 +140,7 @@ def update_critic_with_inference(
             critic.apply_fn({'params': critic_params}, batch['observations'], guidance_clean_actions)
         )
         
-        denoise_steps = 10
+        denoise_steps = middle_actions.shape[2] - 1
         for t in range(1, denoise_steps + 1):
             curr_actions = middle_actions[:, :, t, :]
             current_time = jnp.full((curr_actions.shape[0], 1), t, dtype=jnp.int32)
