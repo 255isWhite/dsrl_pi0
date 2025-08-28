@@ -11,68 +11,39 @@ proj_name="DSRL_pi0_Libero"
 #   "qwarmup=1,seed=43"
 # )
 
-gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
+gpu_list=(4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "res_H=1,guidance_scale=1.0,label=off_guidance"
-  "res_H=5000,guidance_scale=1.0,label=off_guidance"
-  "res_H=10000,guidance_scale=1.0,label=off_guidance"
-  "res_H=20000,guidance_scale=1.0,label=off_guidance"
-  "res_H=50000,guidance_scale=1.0,label=off_guidance"
-  "res_H=100000,guidance_scale=1.0,label=off_guidance"
+  "res_H=0,guidance_scale=1.0,label=single_v_iql"
+  "res_H=5000,guidance_scale=1.0,label=single_v_iql"
+  "res_H=10000,guidance_scale=1.0,label=single_v_iql"
+  "res_H=20000,guidance_scale=1.0,label=single_v_iql"
+  "res_H=50000,guidance_scale=1.0,label=single_v_iql"
+  "res_H=100000,guidance_scale=1.0,label=single_v_iql"
 
-  "res_H=1,guidance_scale=2.0,label=off_guidance"
-  "res_H=5000,guidance_scale=2.0,label=off_guidance"
-  "res_H=10000,guidance_scale=2.0,label=off_guidance"
-  "res_H=20000,guidance_scale=2.0,label=off_guidance"
-  "res_H=50000,guidance_scale=2.0,label=off_guidance"
-  "res_H=100000,guidance_scale=2.0,label=off_guidance"
+  "res_H=0,guidance_scale=1.0,label=single_v_iql,task_id=9"
+  "res_H=5000,guidance_scale=1.0,label=single_v_iql,task_id=9"
+  "res_H=10000,guidance_scale=1.0,label=single_v_iql,task_id=9"
+  "res_H=20000,guidance_scale=1.0,label=single_v_iql,task_id=9"
+  "res_H=50000,guidance_scale=1.0,label=single_v_iql,task_id=9"
+  "res_H=100000,guidance_scale=1.0,label=single_v_iql,task_id=9"
 
-  "res_H=1,guidance_scale=3.0,label=off_guidance"
-  "res_H=5000,guidance_scale=3.0,label=off_guidance"
-  "res_H=10000,guidance_scale=3.0,label=off_guidance"
-  "res_H=20000,guidance_scale=3.0,label=off_guidance"
-  "res_H=50000,guidance_scale=3.0,label=off_guidance"
-  "res_H=100000,guidance_scale=3.0,label=off_guidance"
+  "res_H=0,guidance_scale=3.0,label=single_v_iql"
+  "res_H=5000,guidance_scale=3.0,label=single_v_iql"
+  "res_H=10000,guidance_scale=3.0,label=single_v_iql"
+  "res_H=20000,guidance_scale=3.0,label=single_v_iql"
+  "res_H=50000,guidance_scale=3.0,label=single_v_iql"
+  "res_H=100000,guidance_scale=3.0,label=single_v_iql"
 
-  "res_H=1,guidance_scale=4.0,label=off_guidance"
-  "res_H=5000,guidance_scale=4.0,label=off_guidance"
-  "res_H=10000,guidance_scale=4.0,label=off_guidance"
-  "res_H=20000,guidance_scale=4.0,label=off_guidance"
-  "res_H=50000,guidance_scale=4.0,label=off_guidance"
-  "res_H=100000,guidance_scale=4.0,label=off_guidance"
-
-  "res_H=1,guidance_scale=1.0,label=off_guidance,task_id=9"
-  "res_H=5000,guidance_scale=1.0,label=off_guidance,task_id=9"
-  "res_H=10000,guidance_scale=1.0,label=off_guidance,task_id=9"
-  "res_H=20000,guidance_scale=1.0,label=off_guidance,task_id=9"
-  "res_H=50000,guidance_scale=1.0,label=off_guidance,task_id=9"
-  "res_H=100000,guidance_scale=1.0,label=off_guidance,task_id=9"
-
-  "res_H=1,guidance_scale=2.0,label=off_guidance,task_id=9"
-  "res_H=5000,guidance_scale=2.0,label=off_guidance,task_id=9"
-  "res_H=10000,guidance_scale=2.0,label=off_guidance,task_id=9"
-  "res_H=20000,guidance_scale=2.0,label=off_guidance,task_id=9"
-  "res_H=50000,guidance_scale=2.0,label=off_guidance,task_id=9"
-  "res_H=100000,guidance_scale=2.0,label=off_guidance,task_id=9"
-
-  "res_H=1,guidance_scale=3.0,label=off_guidance,task_id=9"
-  "res_H=5000,guidance_scale=3.0,label=off_guidance,task_id=9"
-  "res_H=10000,guidance_scale=3.0,label=off_guidance,task_id=9"
-  "res_H=20000,guidance_scale=3.0,label=off_guidance,task_id=9"
-  "res_H=50000,guidance_scale=3.0,label=off_guidance,task_id=9"
-  "res_H=100000,guidance_scale=3.0,label=off_guidance,task_id=9"
-
-  "res_H=1,guidance_scale=4.0,label=off_guidance,task_id=9"
-  "res_H=5000,guidance_scale=4.0,label=off_guidance,task_id=9"
-  "res_H=10000,guidance_scale=4.0,label=off_guidance,task_id=9"
-  "res_H=20000,guidance_scale=4.0,label=off_guidance,task_id=9"
-  "res_H=50000,guidance_scale=4.0,label=off_guidance,task_id=9"
-  "res_H=100000,guidance_scale=4.0,label=off_guidance,task_id=9"
-
+  "res_H=0,guidance_scale=3.0,label=single_v_iql,task_id=9"
+  "res_H=5000,guidance_scale=3.0,label=single_v_iql,task_id=9"
+  "res_H=10000,guidance_scale=3.0,label=single_v_iql,task_id=9"
+  "res_H=20000,guidance_scale=3.0,label=single_v_iql,task_id=9"
+  "res_H=50000,guidance_scale=3.0,label=single_v_iql,task_id=9"
+  "res_H=100000,guidance_scale=3.0,label=single_v_iql,task_id=9"
 )
 
 
-per_proc_cap_gb=12
+per_proc_cap_gb=11
 max_concurrency_per_gpu=6
 safety_gb=1
 sleep_between_launch=1
@@ -260,7 +231,7 @@ start_task_on_slot() {
 
     # 3) 用 exec 让当前 PID 直接变成 python（记录到的就是 python 的 PID）
     exec python3 examples/launch_train_sim.py \
-      --algorithm pixel_sac \
+      --algorithm pixel_sac_iql_single_v \
       --env libero \
       --seed 42 \
       --prefix "${tag}_G${gpu_id}" \
@@ -279,7 +250,7 @@ start_task_on_slot() {
       --hidden_dims 128 \
       --task_id 2 \
       --task_suite libero_90 \
-      --pi0_model /data/.zh1/pi0/libero130_1shot/20000/20000 \
+      --pi0_model /data0/pi0/libero_130_1shot_2w \
       --pi0_config pi0_libero130_1shot \
       --eval_at_begin 1 \
       --qwarmup 1 \
@@ -287,6 +258,7 @@ start_task_on_slot() {
       --res_coeff 0.1 \
       --max_timesteps 400 \
       --guidance_scale 3.0 \
+      --expectile 0.7 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
   ) &

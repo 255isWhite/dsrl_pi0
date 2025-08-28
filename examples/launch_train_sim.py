@@ -43,9 +43,11 @@ if __name__ == '__main__':
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
     parser.add_argument('--guidance_scale', default=1.0, help='guidance scale for pi0 policy', type=float)
     parser.add_argument('--denoise_steps', default=10, help='number of diffusion steps for pi0 policy', type=int)
+    parser.add_argument('--expectile', default=0.7, help='expectile for value function', type=float)
     
     train_args_dict = dict(
         actor_lr=1e-4,
+        value_lr=1e-3,
         critic_lr=3e-4,
         temp_lr=3e-4,
         hidden_dims= (128, 128, 128),

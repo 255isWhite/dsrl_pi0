@@ -1,6 +1,6 @@
 #!/bin/bash
 proj_name=DSRL_test
-device_id=0
+device_id=7
 
 export DISPLAY=:0
 export MUJOCO_GL=egl
@@ -15,10 +15,10 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 # export XLA_FLAGS="--xla_dump_to=/tmp/xla_dump --xla_dump_hlo_as_text"
 
 JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
---algorithm pixel_sac \
+--algorithm pixel_sac_iql_single_v \
 --env libero \
 --wandb_project ${proj_name} \
---batch_size 8 \
+--batch_size 256 \
 --discount 0.999 \
 --seed 0 \
 --max_steps 500000  \
@@ -41,3 +41,4 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --max_timesteps 200 \
 --use_res 1 \
 --denoise_steps 10 \
+--res_H 50

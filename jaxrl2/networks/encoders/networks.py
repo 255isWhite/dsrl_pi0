@@ -48,6 +48,43 @@ class PixelMultiplexer(nn.Module):
     def __call__(self,
                  observations: Union[FrozenDict, Dict],
                  actions: Optional[jnp.ndarray] = None,
+                 training: bool = False):
+        observations = FrozenDict(observations)
+
+        x = self.encoder(observations['pixels'], training)
+        if self.use_bottleneck:
+            x = nn.Dense(self.latent_dim, kernel_init=xavier_init())(x)
+            x = nn.LayerNorm()(x)
+            x = nn.tanh(x)
+
+        obs = observations.copy(add_or_replace={'pixels': x})
+
+        # # print key and shape of obs
+        # for k, v in obs.items():
+        #     print(f"key: {k}, shape: {v.shape}")
+        # # action
+        # if actions is not None:
+        #     print(f"action shape: {actions.shape}")
+
+        # print('fully connected keys', x.keys())
+        if actions is None:
+            return self.network(obs, training=training)
+        else:
+            return self.network(obs, actions, training=training)
+
+
+class TimePixelMultiplexer(nn.Module):
+    encoder: Union[nn.Module, list]
+    network: nn.Module
+    latent_dim: int
+    use_bottleneck: bool=True
+    denoise_steps: int=10
+    time_dim: int=8
+
+    @nn.compact
+    def __call__(self,
+                 observations: Union[FrozenDict, Dict],
+                 actions: Optional[jnp.ndarray] = None,
                  times: Optional[jnp.ndarray] = None,
                  training: bool = False):
         observations = FrozenDict(observations)

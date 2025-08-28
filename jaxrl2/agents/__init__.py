@@ -1,3 +1,4 @@
 from jaxrl2.agents.pixel_sac import PixelSACLearner
 from jaxrl2.agents.pixel_sac_residual import PixelSACResidualLearner
 from jaxrl2.agents.pixel_sac_residual_2td import PixelSACResidualLearner2TD
+from jaxrl2.agents.pixel_sac_iql_single_v import PixelSACIQLSingleVLearner

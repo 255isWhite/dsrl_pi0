@@ -52,44 +52,54 @@ def update_value_and_critic(
     # 1. Value update (expectile regression)
     # ---------------------
     def value_loss_fn(params):
-        value_loss = 0.0
-        value_means = []
-        for t in range(denoise_steps + 1):
-            curr_actions = middle_actions[:, :, t, :]
-            current_times = jnp.full((batch_size, 1), t, dtype=jnp.int32)
-            curr_qs = critic.apply_fn({'params': critic.params}, observations, curr_actions, current_times)
-            curr_v = value.apply_fn({'params': params}, observations, times=current_times)
-            tgt_q = jnp.mean(curr_qs, axis=0)
-            diff = tgt_q - curr_v
-            weight = jnp.where(diff > 0, expectile, 1 - expectile)
-            value_loss += (weight * (diff**2)).mean()
-            if t == 0 or t == denoise_steps:
-                value_means.append(curr_v.mean())
-        return value_loss, {"value_loss": value_loss, "v_0_mean": value_means[0], "v_T_mean": value_means[1]}
+        qs = critic.apply_fn(
+            {'params': critic.params}, observations, actions
+        )
+        if critic_reduction == 'min':
+            q4v = qs.min(axis=0)
+        elif critic_reduction == 'mean':
+            q4v = qs.mean(axis=0)
+        else:
+            raise NotImplementedError()
+
+        v = value.apply_fn({"params": params}, observations)
+        diff = q4v - v
+        weight = jnp.where(diff > 0, expectile, 1 - expectile)
+        loss = (weight * (diff**2)).mean()
+        return loss, {"v_loss": loss, "v_mean": v.mean()}
 
     (v_loss, v_info), v_grads = jax.value_and_grad(value_loss_fn, has_aux=True)(value.params)
     new_value = value.apply_gradients(grads=v_grads)
     
     # 2. Critic update (TD loss)
     # ---------------------
-    def critic_loss_fn(params):        
-        critic_loss = 0.0
-        critic_means = []
-        for t in range(denoise_steps + 1):
+    def critic_loss_fn(params):
+        # CLEAN Q
+        qs = critic.apply_fn({"params": params}, observations, actions)
+
+        target_v = value.apply_fn({"params": new_value.params}, next_observations)
+        target_q = rewards + discounts * masks * target_v  # (B,1)
+        
+        diff = qs - target_q
+        clean_critic_loss = (diff ** 2).mean()       # 一次 mean, 高效
+        
+        # MIDDLE Q
+        mid_critic_loss = 0.0
+        for t in range(1, denoise_steps + 1):
             curr_actions = middle_actions[:, :, t, :]
             current_times = jnp.full((batch_size, 1), t, dtype=jnp.int32)
             curr_qs = critic.apply_fn({'params': params}, observations, curr_actions, current_times)
-            curr_v = value.apply_fn({'params': new_value.params}, next_observations, times=current_times)
-            curr_tgt = rewards + discounts * masks * curr_v  # (B,1)
-            curr_td_err = curr_qs - curr_tgt
-            critic_loss += jnp.mean(curr_td_err * curr_td_err)
-            if t == 0 or t == denoise_steps:
-                critic_means.append(curr_qs.mean())
+            curr_td_err = curr_qs - target_q
+            mid_critic_loss += jnp.mean(curr_td_err * curr_td_err)
+
+        critic_loss = clean_critic_loss + mid_critic_loss
         
         info = {
             "critic_loss": critic_loss,
-            "q_0_mean": critic_means[0],
-            "q_T_mean": critic_means[1],
+            "clean_critic_loss": clean_critic_loss,
+            "mid_critic_loss": mid_critic_loss,
+            "q_mean": qs.mean(),
+            "target_q_mean": target_q.mean(),
         }
         return critic_loss, info
 
@@ -150,7 +160,7 @@ def _update_jit(
     return rng, new_value, new_critic, new_target_critic_params, info
     
 
-class PixelSACLearner(Agent):
+class PixelSACIQLSingleVLearner(Agent):
 
     def __init__(self,
                  seed: int,
@@ -265,7 +275,7 @@ class PixelSACLearner(Agent):
         
 
         value_def = StateValue(hidden_dims)
-        value_def = TimePixelMultiplexer(encoder=encoder_def,
+        value_def = PixelMultiplexer(encoder=encoder_def,
                                       network=value_def,
                                       latent_dim=latent_dim,
                                       use_bottleneck=use_bottleneck,
@@ -273,7 +283,7 @@ class PixelSACLearner(Agent):
                                       time_dim=time_dim,
                                       )
         print(value_def)
-        value_def_init = value_def.init(value_key, observations, times=times)
+        value_def_init = value_def.init(value_key, observations)
         self._value_init_params = value_def_init['params']
 
         value_params = value_def_init['params']

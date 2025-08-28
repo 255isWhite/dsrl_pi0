@@ -149,7 +149,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                     batch = next(replay_buffer_iterator)
                     
                     # noise&&clean space Critic & Actor updates
-                    update_info = agent.update_with_inference(batch, pi0_params)
+                    update_info = agent.update(batch)
                     
                     # update_info = agent.update_wo_inference(batch)
                     # print(f"mid_loss: {update_info['mid_loss']}, critic_loss: {update_info['critic_loss']}")
@@ -212,12 +212,6 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
         if not variant.add_states:
             obs.pop('state', None)
             next_obs.pop('state', None)
-            
-        pi0_obs = traj['pi0_obs'][t]
-        # remove key "prompt"
-        pi0_obs.pop('prompt', None)
-        next_pi0_obs = traj['pi0_obs'][t+1] if t < episode_len - 1 else traj['pi0_obs'][t]
-        next_pi0_obs.pop('prompt', None)
 
         insert_dict = dict(
             observations=obs,
@@ -233,7 +227,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
             masks=masks[t],
             discount=variant.discount ** discount_horizon
         )
-        online_replay_buffer.insert(insert_dict, pi0_obs, next_pi0_obs)
+        online_replay_buffer.insert(insert_dict)
     online_replay_buffer.increment_traj_counter()
 
 def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_guidance=True):
@@ -256,7 +250,6 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     norm_action_list = []
     clean_action_list = []
     actual_norm_action_list = []
-    pi0_obs_list = []
     middle_action_list = []
 
     for t in tqdm(range(max_timesteps)):
@@ -280,7 +273,6 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             # we then use the noise to sample the action from diffusion model
             rng, key = jax.random.split(rng)
             obs_pi_zero = obs_to_pi_zero_input(obs, variant)
-            pi0_obs_list.append(obs_pi_zero)
             # if i == 0:
             #     # for initial round of data collection, we sample from standard gaussian noise
             #     noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
@@ -344,7 +336,6 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     obs_list.append(obs_dict)
     image_list.append(curr_image)
     pi0_obs = obs_to_pi_zero_input(obs, variant)
-    pi0_obs_list.append(pi0_obs)
     
     # per episode
     rewards = np.array(rewards)
@@ -377,7 +368,6 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         'episode_return': episode_return,
         'images': image_list,
         'env_steps': t + 1,
-        'pi0_obs': pi0_obs_list,
         'middle_actions': middle_action_list,
     }
 
