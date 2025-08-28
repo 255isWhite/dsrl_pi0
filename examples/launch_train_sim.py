@@ -35,7 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--qwarmup', default=0, help='whether to warmup the Q network', type=int)
     parser.add_argument('--use_res', default=0, help='whether to use residual learner', type=int)
     parser.add_argument('--res_coeff', default=0.1, help='coefficient for residual action', type=float)
-    parser.add_argument('--res_H', default=100_000, help='horizon for residual action', type=int)
+    parser.add_argument('--res_H', default=0, help='horizon for residual action', type=int)
     parser.add_argument('--td3_noise_scale', default=0.2, help='TD3 noise scale', type=float)
     parser.add_argument('--label', default='', help='label for wandb run', type=str)
     parser.add_argument('--action_magnitude', default=1.0, help='magnitude of actions', type=float)

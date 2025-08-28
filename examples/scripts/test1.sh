@@ -38,6 +38,6 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --eval_at_begin 0 \
 --kl_coeff 1.0 \
 --qwarmup 1 \
---max_timesteps 200 \
+--max_timesteps 40 \
 --use_res 1 \
---denoise_steps 2 \
+--denoise_steps 10 \

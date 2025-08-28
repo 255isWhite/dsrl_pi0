@@ -66,7 +66,7 @@ class PixelMultiplexer(nn.Module):
             # 从 pixels 里推 batch size
             B = observations['pixels'].shape[0]
             times = jnp.zeros((B, 1), dtype=jnp.int32)  # shape [B, 1]
-        
+        # print("times:", times.shape)
         # embedding lookup
         t_emb = nn.Embed(num_embeddings=self.denoise_steps+1, features=self.time_dim)(
             times.astype(jnp.int32)

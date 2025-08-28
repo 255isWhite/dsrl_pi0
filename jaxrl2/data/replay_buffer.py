@@ -27,13 +27,14 @@ def _init_replay_dict(obs_space: gym.Space,
 
 class ReplayBuffer(Dataset):
     
-    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, pi0_input_transform=None, pi0_prompt=None):
+    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, pi0_input_transform=None, pi0_prompt=None, denoise_steps=10):
         self.observation_space = observation_space
         self.action_space = action_space
         self.capacity = capacity
         self.magic_shape = (self.action_space.shape[0], 7)
         self.pi0_input_transform = pi0_input_transform
         self.pi0_prompt = pi0_prompt
+        self.denoise_steps = denoise_steps        
 
         print("making replay buffer of capacity ", self.capacity)
 
@@ -48,6 +49,9 @@ class ReplayBuffer(Dataset):
         rewards = np.empty((self.capacity, ), dtype=np.float32)
         masks = np.empty((self.capacity, ), dtype=np.float32)
         discount = np.empty((self.capacity, ), dtype=np.float32)
+        
+        self.middle_shape = (*self.action_space.shape[:1], self.denoise_steps+1, *self.action_space.shape[1:])
+        middle_actions = np.empty((self.capacity, *self.middle_shape), dtype=self.action_space.dtype)
 
         self.data = {
             'observations': observations,
@@ -58,6 +62,7 @@ class ReplayBuffer(Dataset):
             'clean_actions': clean_actions,
             'actual_norm_actions': actual_norm_actions,
             'next_actual_norm_actions': next_actual_norm_actions,
+            'middle_actions': middle_actions,
             'rewards': rewards,
             'masks': masks,
             'discount': discount,
@@ -70,6 +75,12 @@ class ReplayBuffer(Dataset):
         self.streaming_buffer_size = None # this is for streaming the online data
         
         self.data['pi_zero_obs'] = {
+            "observation/image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
+            "observation/wrist_image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
+            "observation/state": np.empty((self.capacity, 8), dtype=np.float32),
+        }
+        
+        self.data['next_pi_zero_obs'] = {
             "observation/image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
             "observation/wrist_image": np.empty((self.capacity, 224, 224, 3), dtype=np.uint8),
             "observation/state": np.empty((self.capacity, 8), dtype=np.float32),
@@ -100,6 +111,7 @@ class ReplayBuffer(Dataset):
         clean_actions_list = []
         actual_norm_actions_list = []
         next_actual_norm_actions_list = []
+        middle_actions_list = []
 
         for i in self.which_trajs:
             start, end = self.traj_bounds[i]
@@ -123,6 +135,7 @@ class ReplayBuffer(Dataset):
             rewards_list.append(self.data['rewards'][start:end])
             terminals_list.append(1-self.data['masks'][start:end])
             masks_list.append(self.data['masks'][start:end])
+            middle_actions_list.append(self.data['middle_actions'][start:end])
 
 
         
@@ -134,13 +147,14 @@ class ReplayBuffer(Dataset):
             'clean_actions': clean_actions_list,
             'actual_norm_actions': actual_norm_actions_list,
             'next_actual_norm_actions': next_actual_norm_actions_list,
+            'middle_actions': middle_actions_list,
             'rewards': rewards_list,
             'terminals': terminals_list,
             'masks': masks_list,
         }
         return batch
         
-    def insert(self, data_dict: DatasetDict, pi_zero_obs_dict=None):
+    def insert(self, data_dict: DatasetDict, pi_zero_obs_dict=None, next_pi_zero_obs_dict=None):
         if self.size == self.capacity:
             # Double the capacity
             observations = _init_replay_dict(self.observation_space, self.capacity)
@@ -151,6 +165,7 @@ class ReplayBuffer(Dataset):
             actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
             next_actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
             next_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
+            middle_actions = np.empty((self.capacity, *self.middle_shape), dtype=self.action_space.dtype)
             rewards = np.empty((self.capacity, ), dtype=np.float32)
             masks = np.empty((self.capacity, ), dtype=np.float32)
             discount = np.empty((self.capacity, ), dtype=np.float32)
@@ -164,6 +179,7 @@ class ReplayBuffer(Dataset):
                 'actual_norm_actions': actual_norm_actions,
                 'next_actual_norm_actions': next_actual_norm_actions,
                 'next_actions': next_actions,
+                'middle_actions': middle_actions,
                 'rewards': rewards,
                 'masks': masks,
                 'discount': discount,
@@ -186,6 +202,10 @@ class ReplayBuffer(Dataset):
                 self.data['pi_zero_obs'][k] = np.concatenate(
                     (self.data['pi_zero_obs'][k], pi_zero_obs_new[k]), axis=0
                 )
+            for k in self.data['next_pi_zero_obs']:
+                self.data['next_pi_zero_obs'][k] = np.concatenate(
+                    (self.data['next_pi_zero_obs'][k], pi_zero_obs_new[k]), axis=0
+                )
             self.capacity *= 2
 
 
@@ -201,6 +221,11 @@ class ReplayBuffer(Dataset):
             self.data['pi_zero_obs']["observation/image"][self.size] = pi_zero_obs_dict["observation/image"]
             self.data['pi_zero_obs']["observation/wrist_image"][self.size] = pi_zero_obs_dict["observation/wrist_image"]
             self.data['pi_zero_obs']["observation/state"][self.size] = pi_zero_obs_dict["observation/state"]
+            
+        if next_pi_zero_obs_dict is not None:
+            self.data['next_pi_zero_obs']["observation/image"][self.size] = next_pi_zero_obs_dict["observation/image"]
+            self.data['next_pi_zero_obs']["observation/wrist_image"][self.size] = next_pi_zero_obs_dict["observation/wrist_image"]
+            self.data['next_pi_zero_obs']["observation/state"][self.size] = next_pi_zero_obs_dict["observation/state"]
 
         self.size += 1
     
@@ -229,7 +254,7 @@ class ReplayBuffer(Dataset):
                 data_dict[x] = {}
                 for y in self.data[x]:
                     data_dict[x][y] = self.data[x][y][indices]
-                if x == 'pi_zero_obs' and self.pi0_input_transform is not None:
+                if x == 'pi_zero_obs' or x == 'next_pi_zero_obs':
                     data_dict[x]["prompt"] = self.pi0_prompt
                     # print(f"before transform, keys are {data_dict[x].keys()}")
                     data_dict[x] = self.pi0_input_transform(data_dict[x])

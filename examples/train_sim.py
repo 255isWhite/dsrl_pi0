@@ -160,7 +160,7 @@ def main(variant):
 
     if variant.algorithm == 'pixel_sac':
         print("Using pixel sac learner")
-        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, sample_times, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl , task_prompt=variant.task_description, **kwargs)
+        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, sample_times, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl , task_prompt=variant.task_description, guidance_scale=variant.guidance_scale, **kwargs)
     elif variant.algorithm == 'pixel_sac_residual':
         print("Using residual learner")
         agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
@@ -187,7 +187,7 @@ def main(variant):
     
     online_buffer_size = variant.max_steps  // variant.multi_grad_step
     online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size), \
-        pi0_input_transform=agent_dp._input_transform, pi0_prompt=variant.task_description)
+        pi0_input_transform=agent_dp._input_transform, pi0_prompt=variant.task_description, denoise_steps=variant.denoise_steps)
     replay_buffer = online_replay_buffer
     replay_buffer.seed(variant.seed)
     trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin, dp_unnorm_transform=dp_unnorm_transform, pi0_params=pi0_params, pi0_def=pi0_def)

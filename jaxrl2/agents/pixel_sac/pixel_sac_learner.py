@@ -25,7 +25,7 @@ from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpala
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
 from jaxrl2.agents.pixel_sac.actor_updater import update_actor
-from jaxrl2.agents.pixel_sac.critic_updater import update_critic, update_critic_wo_actor
+from jaxrl2.agents.pixel_sac.critic_updater import update_critic_with_inference, update_critic_wo_inference
 from jaxrl2.agents.pixel_sac.temperature_updater import update_temperature
 from jaxrl2.agents.pixel_sac.temperature import Temperature
 from jaxrl2.data.dataset import DatasetDict
@@ -92,13 +92,12 @@ def _update_jit(
         **alpha_info
     }
     
-@functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras', 'task_prompt', 'pi0_def'))
-def _update_jit_wo_actor(
+@functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
+def _update_jit_wo_inference(
     rng: PRNGKey, critic: TrainState, actor: TrainState,
     target_critic_params: Params, batch: TrainState,
     discount: float, tau: float, target_entropy: float,
     critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int,
-    pi0_params = None, pi0_def = None, task_prompt = None
 ) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
     aug_pixels = batch['observations']['pixels']
     aug_next_pixels = batch['next_observations']['pixels']
@@ -134,7 +133,7 @@ def _update_jit_wo_actor(
     
     key, rng = jax.random.split(rng)
     target_critic = critic.replace(params=target_critic_params)
-    new_critic, critic_info = update_critic_wo_actor(key, critic, actor, target_critic, batch, discount, critic_reduction=critic_reduction, pi0_params=pi0_params, pi0_def=pi0_def, task_prompt=task_prompt)
+    new_critic, critic_info = update_critic_wo_inference(key, critic, actor, target_critic, batch, discount, critic_reduction=critic_reduction)
     new_target_critic_params = soft_target_update(new_critic.params, target_critic_params, tau)
     
 
@@ -144,12 +143,12 @@ def _update_jit_wo_actor(
 
 def make_jit_with_pi0_def(pi0_def):
     @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras', 'task_prompt'))
-    def _update_jit_wo_actor(
+    def _update_jit_with_inference(
         rng: PRNGKey, critic: TrainState, actor: TrainState,
         target_critic_params: Params, batch: TrainState,
         discount: float, tau: float, target_entropy: float,
         critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int,
-        pi0_params = None, task_prompt = None
+        pi0_params = None, task_prompt = None, guidance_scale: float = 1.0
     ) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
         aug_pixels = batch['observations']['pixels']
         aug_next_pixels = batch['next_observations']['pixels']
@@ -185,7 +184,7 @@ def make_jit_with_pi0_def(pi0_def):
         
         key, rng = jax.random.split(rng)
         target_critic = critic.replace(params=target_critic_params)
-        new_critic, critic_info = update_critic_wo_actor(key, critic, actor, target_critic, batch, discount, critic_reduction=critic_reduction, pi0_params=pi0_params, pi0_def=pi0_def, task_prompt=task_prompt)
+        new_critic, critic_info = update_critic_with_inference(key, critic, actor, target_critic, batch, discount, critic_reduction=critic_reduction, guidance_scale=guidance_scale, pi0_params=pi0_params, pi0_def=pi0_def, task_prompt=task_prompt)
         new_target_critic_params = soft_target_update(new_critic.params, target_critic_params, tau)
         
 
@@ -193,7 +192,7 @@ def make_jit_with_pi0_def(pi0_def):
             **critic_info,
         }
         
-    return _update_jit_wo_actor
+    return _update_jit_with_inference
 
 class PixelSACLearner(Agent):
 
@@ -232,6 +231,7 @@ class PixelSACLearner(Agent):
                  denoise_steps: int = 10,
                  time_dim: int = 8,
                  task_prompt: Optional[str] = None,
+                 guidance_scale: float = 1.0,
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -250,6 +250,7 @@ class PixelSACLearner(Agent):
         self.kl_coeff = kl_coeff
         self.decay_kl = decay_kl
         self.task_prompt = task_prompt
+        self.guidance_scale = guidance_scale
 
         rng = jax.random.PRNGKey(seed)
         rng, actor_key, critic_key, temp_key = jax.random.split(rng, 4)
@@ -343,7 +344,7 @@ class PixelSACLearner(Agent):
         
         
     def init_pi0_def(self, pi0_def):
-        self._update_critic_jit = make_jit_with_pi0_def(pi0_def)
+        self._update_critic_jit_with_inference = make_jit_with_pi0_def(pi0_def)
 
     def update(self, batch: FrozenDict) -> Dict[str, float]:
         new_rng, new_actor, new_critic, new_target_critic, new_temp, info = _update_jit(
@@ -374,31 +375,26 @@ class PixelSACLearner(Agent):
         self._target_critic_params = new_target_critic
         return info
     
-    # def update_wo_actor(self, batch: FrozenDict, pi0_params, pi0_def) -> Dict[str, float]:
-    #     new_rng, new_critic, new_target_critic, info = _update_jit_wo_actor(
-    #         self._rng, self._critic, self._actor, self._target_critic_params, \
-    #             batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, \
-    #                 self.color_jitter, self.aug_next, self.num_cameras, \
-    #                     pi0_params, pi0_def, self.task_prompt
-    #         )
+    def update_wo_inference(self, batch: FrozenDict) -> Dict[str, float]:
+        new_rng, new_critic, new_target_critic, info = _update_jit_wo_inference(
+            self._rng, self._critic, self._actor, self._target_critic_params, \
+                batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, \
+                    self.color_jitter, self.aug_next, self.num_cameras,
+            )
 
-    #     self._rng = new_rng
-    #     self._critic = new_critic
-    #     self._target_critic_params = new_target_critic
-    #     return info
+        self._rng = new_rng
+        self._critic = new_critic
+        self._target_critic_params = new_target_critic
+        return info
     
-    def update_wo_actor(self, batch: FrozenDict, pi0_params) -> Dict[str, float]:
+    def update_with_inference(self, batch: FrozenDict, pi0_params) -> Dict[str, float]:
         
-        with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=False):
-            new_rng, new_critic, new_target_critic, info = self._update_critic_jit(
-                self._rng, self._critic, self._actor, self._target_critic_params, \
-                    batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, \
-                        self.color_jitter, self.aug_next, self.num_cameras, \
-                            pi0_params, self.task_prompt
-                )
-            x = jax.random.normal(self._rng, (100, 100))  # 小矩阵
-            y = x @ x
-            y.block_until_ready()  # 等待计算完成
+        new_rng, new_critic, new_target_critic, info = self._update_critic_jit_with_inference(
+            self._rng, self._critic, self._actor, self._target_critic_params, \
+                batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, \
+                    self.color_jitter, self.aug_next, self.num_cameras, \
+                        pi0_params, self.task_prompt, self.guidance_scale
+            )
 
         self._rng = new_rng
         self._critic = new_critic
