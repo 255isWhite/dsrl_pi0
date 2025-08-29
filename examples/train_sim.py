@@ -10,6 +10,7 @@ import pathlib, copy
 import jax
 from jaxrl2.agents.pixel_sac_residual import PixelSACResidualLearner
 from jaxrl2.agents.pixel_sac_residual_2td import PixelSACResidualLearner2TD
+from jaxrl2.agents.pixel_sac_residual_10td import PixelSACResidualLearner10TD
 from jaxrl2.agents.pixel_sac_iql_single_v import PixelSACIQLSingleVLearner
 from jaxrl2.agents.pixel_sac import PixelSACLearner
 from jaxrl2.utils.general_utils import add_batch_dim
@@ -176,6 +177,9 @@ def main(variant):
     elif variant.algorithm == 'pixel_sac_residual_2td':
         print("Using residual 2TD learner")
         agent = PixelSACResidualLearner2TD(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
+    elif variant.algorithm == 'pixel_sac_residual_10td':
+        print("Using residual 10TD learner")
+        agent = PixelSACResidualLearner10TD(variant.seed, sample_obs, sample_action, sample_times, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, td3_noise_scale=variant.td3_noise_scale, **kwargs)
     else:
         raise NotImplementedError(f"Unknown algorithm {variant.algorithm}, current supported algorithms are pixel_sac, pixel_sac_residual, pixel_sac_residual_2td")
     
@@ -188,8 +192,7 @@ def main(variant):
         checkpoint_dir = download.maybe_download(model_path)
     else:
         raise NotImplementedError()
-    agent_dp, dp_unnorm_transform, pi0_params, pi0_def = policy_config.create_trained_policy(config, checkpoint_dir, guidance=agent._critic, \
-        guidance_scale=variant.guidance_scale, denoise_steps=variant.denoise_steps)
+    agent_dp, dp_unnorm_transform = policy_config.create_trained_policy(config, checkpoint_dir, res_actor=agent._res_actor, res_coeff=variant.res_coeff)
     print("Loaded pi0 policy from %s", checkpoint_dir)
     
     online_buffer_size = variant.max_steps  // variant.multi_grad_step
@@ -197,4 +200,4 @@ def main(variant):
         denoise_steps=variant.denoise_steps)
     replay_buffer = online_replay_buffer
     replay_buffer.seed(variant.seed)
-    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin, dp_unnorm_transform=dp_unnorm_transform, pi0_params=pi0_params, pi0_def=pi0_def)
+    trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin, dp_unnorm_transform=dp_unnorm_transform)

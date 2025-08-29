@@ -91,7 +91,7 @@ def obs_to_qpos(obs, variant):
 
 def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger,
                                        perform_control_evals=True, shard_fn=None, agent_dp=None, eval_at_begin=True,\
-                                           dp_unnorm_transform=None, pi0_params=None, pi0_def=None):
+                                           dp_unnorm_transform=None):
     replay_buffer_iterator = replay_buffer.get_iterator(variant.batch_size)
     if shard_fn is not None:
         replay_buffer_iterator = map(shard_fn, replay_buffer_iterator)
@@ -111,11 +111,11 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                 res_prob = (i-warmup_steps)/ variant.res_H if i <= (variant.res_H + warmup_steps) else 1.0
                 
             if i <= variant.res_H:
-                use_guidance = False
+                stop_warmup = False
             else:
-                use_guidance = True
+                stop_warmup = True
                 
-            traj = collect_traj(variant, agent, env, i, agent_dp, res_prob, dp_unnorm_transform, use_guidance=use_guidance)
+            traj = collect_traj(variant, agent, env, i, agent_dp, res_prob, dp_unnorm_transform, stop_warmup=stop_warmup)
             traj_id = online_replay_buffer._traj_counter
             add_online_data_to_buffer(variant, traj, online_replay_buffer)
             total_env_steps += traj['env_steps']
@@ -138,7 +138,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
             if i == 0 and eval_at_begin:
                 print('performing evaluation for initial checkpoint')
                 if perform_control_evals:
-                    perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_guidance=use_guidance)
+                    perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, stop_warmup=stop_warmup)
                 if hasattr(agent, 'perform_eval'):
                     agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
@@ -149,7 +149,10 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                     batch = next(replay_buffer_iterator)
                     
                     # noise&&clean space Critic & Actor updates
-                    update_info = agent.update(batch)
+                    if stop_warmup:
+                        update_info, res_update_info = agent.update(batch)
+                    else:
+                        update_info, res_update_info = agent.update_wo_actor(batch)
                     
                     # update_info = agent.update_wo_inference(batch)
                     # print(f"mid_loss: {update_info['mid_loss']}, critic_loss: {update_info['critic_loss']}")
@@ -160,7 +163,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                     # else:
                     #     update_info = agent.update_wo_actor(batch, agent_dp)
                     #     print('update done')
-                    res_update_info = {}                                       
+                    # res_update_info = {}                                       
     
                     pbar.update()
                     i += 1
@@ -176,6 +179,14 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                                 continue
                             # if k == 'mid_loss':
                             #     print(f"step {i}, mid_loss: {v}")
+                        res_update_info = {k: jax.device_get(v) for k, v in res_update_info.items()}
+                        for k, v in res_update_info.items():
+                            if v.ndim == 0:
+                                wandb_logger.log({f'residual/{k}': v}, step=i)
+                            elif v.ndim <= 2 and i%variant.media_log_interval == 0:
+                                wandb_logger.log_histogram(f'residual/{k}', v, i)
+                            else:
+                                continue
                                 
                     if i % variant.eval_interval == 0:
                         wandb_logger.log({'num_online_samples': len(online_replay_buffer)}, step=i)
@@ -183,7 +194,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                         wandb_logger.log({'env_steps': total_env_steps}, step=i)
                         if i % variant.media_log_interval == 0:
                             if perform_control_evals:
-                                perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_guidance=use_guidance)
+                                perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, stop_warmup=stop_warmup)
                             if hasattr(agent, 'perform_eval'):
                                 agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
@@ -218,6 +229,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
             next_observations=next_obs,
             actions=actions[t], # (B, dim)
             middle_actions=middle_actions[t], # (B, N+1, dim)
+            next_middle_actions=middle_actions[t + 1] if t < episode_len - 1 else middle_actions[t],
             next_actions=actions[t + 1] if t < episode_len - 1 else actions[t],
             norm_actions=norm_actions[t],
             clean_actions=clean_actions[t],
@@ -230,7 +242,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
         online_replay_buffer.insert(insert_dict)
     online_replay_buffer.increment_traj_counter()
 
-def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_guidance=True):
+def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, stop_warmup=False):
     query_frequency = variant.query_freq
     max_timesteps = variant.max_timesteps
     env_max_reward = variant.env_max_reward
@@ -273,25 +285,20 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             # we then use the noise to sample the action from diffusion model
             rng, key = jax.random.split(rng)
             obs_pi_zero = obs_to_pi_zero_input(obs, variant)
-            # if i == 0:
-            #     # for initial round of data collection, we sample from standard gaussian noise
-            #     noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
-            #     noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
-            #     noise = jax.numpy.concatenate([noise, noise_repeat], axis=1)
-            #     actions_noise = noise[0, :agent.action_chunk_shape[0], :]
-            # else:
-            #     # sac agent predicts the noise for diffusion model
-            #     actions_noise = agent.sample_actions(obs_dict)
-            #     actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
-            #     noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
-            #     noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
-            if use_guidance:
-                action_dict, middle_actions = agent_dp.infer_with_guidance(obs_pi_zero, obs_dict)
+            if stop_warmup:
+                # sac agent predicts the noise for diffusion model
+                actions_noise = agent.sample_actions(obs_dict)
+                actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
+                noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
+                noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
+                action_dict, middle_actions = agent_dp.infer_with_res_actor(obs_pi_zero, obs_dict, noise)
             else:
-                action_dict, middle_actions = agent_dp.infer(obs_pi_zero, obs_dict)
-            # print(f"length of middle_actions: {len(middle_actions)}, shape of each action: {middle_actions[0].shape}")
-            # print(f"middle_actions.shape: {middle_actions.shape}")
-            # model_noise = agent_dp.reverse_infer(obs_pi_zero, action=model_actions)["noise"]
+                # for initial round of data collection, we sample from standard gaussian noise
+                noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
+                noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
+                noise = jax.numpy.concatenate([noise, noise_repeat], axis=1)
+                actions_noise = noise[0, :agent.action_chunk_shape[0], :]
+                action_dict, middle_actions = agent_dp.infer(obs_pi_zero, noise)
             
             # # a.
             actions = action_dict["actions"]
@@ -307,7 +314,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             #     actions = action_dict["actions"]
             #     actual_norm_action = action_dict["norm_actions"]
             
-            action_list.append(jnp.expand_dims(action_dict["norm_pad_actions"][0], axis=0)) # (32,)
+            action_list.append(actions_noise) # (32,)
             obs_list.append(obs_dict)
             norm_action_list.append(jnp.expand_dims(action_dict["norm_actions"][0], axis=0)) # (7, )
             clean_action_list.append(jnp.expand_dims(action_dict["actions"][0], axis=0)) # (7, )
@@ -371,7 +378,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         'middle_actions': middle_action_list,
     }
 
-def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_guidance=True):
+def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, stop_warmup=False):
     query_frequency = variant.query_freq
     print('query frequency', query_frequency)
     max_timesteps = variant.max_timesteps
@@ -415,19 +422,20 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 
                 obs_pi_zero = obs_to_pi_zero_input(obs, variant)
                 
-                
-                # if i == 0:
-                #     # for initial evaluation, we sample from standard gaussian noise to evaluate the base policy's performance
-                #     noise = jax.random.normal(rng, (1, 50, 32))
-                # else:
-                #     actions_noise = agent.sample_actions(obs_dict)
-                #     actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
-                #     noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
-                #     noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
-                if use_guidance:
-                    action_dict, middle_actions = agent_dp.infer_with_guidance(obs_pi_zero, obs_dict)
+                if stop_warmup:
+                    # sac agent predicts the noise for diffusion model
+                    actions_noise = agent.sample_actions(obs_dict)
+                    actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
+                    noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
+                    noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
+                    action_dict, middle_actions = agent_dp.infer_with_res_actor(obs_pi_zero, obs_dict, noise)
                 else:
-                    action_dict, middle_actions = agent_dp.infer(obs_pi_zero, obs_dict)
+                    # for initial round of data collection, we sample from standard gaussian noise
+                    noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
+                    noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
+                    noise = jax.numpy.concatenate([noise, noise_repeat], axis=1)
+                    actions_noise = noise[0, :agent.action_chunk_shape[0], :]
+                    action_dict, middle_actions = agent_dp.infer(obs_pi_zero, noise)
 
                 # # a.
                 actions = action_dict["actions"]

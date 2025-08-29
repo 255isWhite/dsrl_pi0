@@ -50,6 +50,7 @@ class ReplayBuffer(Dataset):
         
         self.middle_shape = (*self.action_space.shape[:1], self.denoise_steps+1, *self.action_space.shape[1:])
         middle_actions = np.empty((self.capacity, *self.middle_shape), dtype=self.action_space.dtype)
+        next_middle_actions = np.empty((self.capacity, *self.middle_shape), dtype=self.action_space.dtype)
 
         self.data = {
             'observations': observations,
@@ -61,6 +62,7 @@ class ReplayBuffer(Dataset):
             'actual_norm_actions': actual_norm_actions,
             'next_actual_norm_actions': next_actual_norm_actions,
             'middle_actions': middle_actions,
+            'next_middle_actions': next_middle_actions,
             'rewards': rewards,
             'masks': masks,
             'discount': discount,
@@ -98,6 +100,7 @@ class ReplayBuffer(Dataset):
         actual_norm_actions_list = []
         next_actual_norm_actions_list = []
         middle_actions_list = []
+        next_middle_actions_list = []
 
         for i in self.which_trajs:
             start, end = self.traj_bounds[i]
@@ -122,6 +125,7 @@ class ReplayBuffer(Dataset):
             terminals_list.append(1-self.data['masks'][start:end])
             masks_list.append(self.data['masks'][start:end])
             middle_actions_list.append(self.data['middle_actions'][start:end])
+            next_middle_actions_list.append(self.data['next_middle_actions'][start:end])
 
 
         
@@ -134,6 +138,7 @@ class ReplayBuffer(Dataset):
             'actual_norm_actions': actual_norm_actions_list,
             'next_actual_norm_actions': next_actual_norm_actions_list,
             'middle_actions': middle_actions_list,
+            'next_middle_actions': next_middle_actions_list,
             'rewards': rewards_list,
             'terminals': terminals_list,
             'masks': masks_list,
@@ -152,6 +157,7 @@ class ReplayBuffer(Dataset):
             next_actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
             next_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
             middle_actions = np.empty((self.capacity, *self.middle_shape), dtype=self.action_space.dtype)
+            next_middle_actions = np.empty((self.capacity, *self.middle_shape), dtype=self.action_space.dtype)
             rewards = np.empty((self.capacity, ), dtype=np.float32)
             masks = np.empty((self.capacity, ), dtype=np.float32)
             discount = np.empty((self.capacity, ), dtype=np.float32)
@@ -166,6 +172,7 @@ class ReplayBuffer(Dataset):
                 'next_actual_norm_actions': next_actual_norm_actions,
                 'next_actions': next_actions,
                 'middle_actions': middle_actions,
+                'next_middle_actions': next_middle_actions,
                 'rewards': rewards,
                 'masks': masks,
                 'discount': discount,

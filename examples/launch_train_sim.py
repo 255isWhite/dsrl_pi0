@@ -3,6 +3,14 @@ import sys
 from examples.train_sim import main
 from jaxrl2.utils.launch_util import parse_training_args
 from general_utils import *
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="wandb")
+warnings.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message=".*tostring_rgb.*"
+)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -23,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--prefix', default='', help='prefix to use for wandb')
     parser.add_argument('--suffix', default='', help='suffix to use for wandb')
     parser.add_argument('--multi_grad_step', default=1, help='Number of graident steps to take per environment step, aka UTD', type=int)
-    parser.add_argument('--resize_image', default=-1, help='the size of image if need resizing', type=int)
+    parser.add_argument('--resize_image', default=64, help='the size of image if need resizing', type=int)
     parser.add_argument('--query_freq', default=-1, help='query frequency', type=int)
     parser.add_argument('--task_id', default=57, help='task id for libero environment', type=int)
     parser.add_argument('--task_suite', default='libero_90', help='task suite for libero environment', type=str)
@@ -38,7 +46,6 @@ if __name__ == '__main__':
     parser.add_argument('--res_H', default=0, help='horizon for residual action', type=int)
     parser.add_argument('--td3_noise_scale', default=0.2, help='TD3 noise scale', type=float)
     parser.add_argument('--label', default='', help='label for wandb run', type=str)
-    parser.add_argument('--action_magnitude', default=1.0, help='magnitude of actions', type=float)
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
     parser.add_argument('--guidance_scale', default=1.0, help='guidance scale for pi0 policy', type=float)
@@ -67,7 +74,7 @@ if __name__ == '__main__':
         softmax_temperature=-1,
         target_entropy='auto',
         num_qs=10,
-        # action_magnitude=1.0,
+        action_magnitude=1.0,
         num_cameras=1,
         )
 
