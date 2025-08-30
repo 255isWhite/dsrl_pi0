@@ -156,6 +156,10 @@ class RoboTwinEnv:
 		self.real_ep_count = 0
 		self.current_video_name = None
 		self.recent_results = deque(maxlen=10)
+  
+		here = os.path.dirname(os.path.abspath(__file__))
+		json_path = os.path.join(here, "robotwin_ins.json")
+		self.instructions = json.load(open(json_path))
 	
 		
 	def set_video_ffmpeg(self):
@@ -203,8 +207,7 @@ class RoboTwinEnv:
 	def reset(self):        
 		print(f"millisecons to last reset: {(time.time() - self.start_time) * 1000:.2f} ms")
 		self.start_time = time.time()
-		results = generate_episode_descriptions(self.task_name, self.episode_info_list, 1)
-		instruction = np.random.choice(results[0]["unseen"])
+		instruction = self.instructions[self.task_name]
 		self.env.set_instruction(instruction=instruction)  # set language instruction
 		self.env.setup_demo(**self.env_config)
 		self.env._del_eval_video_ffmpeg()
