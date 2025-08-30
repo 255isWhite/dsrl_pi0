@@ -112,7 +112,7 @@ def update_res_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         actor_loss = 0.0
         actor_q_means = []
         raw_value_list = []
-        for t in range(denoise_steps):
+        for t in range(denoise_steps+1):
             current_times = jnp.full((batch_size, 1), t, dtype=jnp.int32)
             curr_actions, raw_values = actor.apply_fn(
                 {'params': params}, observations, times=current_times
@@ -122,7 +122,7 @@ def update_res_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             curr_qs = critic.apply_fn({'params': critic.params}, observations, curr_actions, current_times)
             
             actor_loss -= curr_qs.mean()
-            if t == 0 or t == denoise_steps-1:
+            if t == 0 or t == denoise_steps-1 or t == denoise_steps:
                 actor_q_means.append(curr_qs.mean())
             raw_value_list.append(raw_values)
 
@@ -131,6 +131,7 @@ def update_res_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             "actor_loss": actor_loss,
             "actor_q_0_mean": actor_q_means[0],
             "actor_q_T_1_mean": actor_q_means[1],
+            "actor_q_T_mean": actor_q_means[2],
             "actor_raw_max": raw_value_array.max(),
             "actor_raw_min": raw_value_array.min(),
             "actor_raw_mean": raw_value_array.mean(),

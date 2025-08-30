@@ -291,14 +291,14 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
                 actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
                 noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
                 noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
-                action_dict, middle_actions = agent_dp.infer_with_res_actor(obs_pi_zero, obs_dict, noise)
+                action_dict, middle_actions = agent_dp.infer_with_res_actor(obs_pi_zero, obs_dict)
             else:
                 # for initial round of data collection, we sample from standard gaussian noise
                 noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
                 noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
                 noise = jax.numpy.concatenate([noise, noise_repeat], axis=1)
                 actions_noise = noise[0, :agent.action_chunk_shape[0], :]
-                action_dict, middle_actions = agent_dp.infer(obs_pi_zero, noise)
+                action_dict, middle_actions = agent_dp.infer(obs_pi_zero)
             
             # # a.
             actions = action_dict["actions"]
@@ -428,14 +428,14 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                     actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
                     noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
                     noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
-                    action_dict, middle_actions = agent_dp.infer_with_res_actor(obs_pi_zero, obs_dict, noise)
+                    action_dict, middle_actions = agent_dp.infer_with_res_actor(obs_pi_zero, obs_dict)
                 else:
                     # for initial round of data collection, we sample from standard gaussian noise
                     noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
                     noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
                     noise = jax.numpy.concatenate([noise, noise_repeat], axis=1)
                     actions_noise = noise[0, :agent.action_chunk_shape[0], :]
-                    action_dict, middle_actions = agent_dp.infer(obs_pi_zero, noise)
+                    action_dict, middle_actions = agent_dp.infer(obs_pi_zero)
 
                 # # a.
                 actions = action_dict["actions"]

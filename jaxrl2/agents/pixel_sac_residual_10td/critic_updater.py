@@ -124,7 +124,7 @@ def update_clean_critic(
     def critic_loss_fn(params):
         critic_loss = 0.0
         critic_means = []
-        for t in range(denoise_steps):
+        for t in range(denoise_steps+1):
             current_times = jnp.full((batch_size, 1), t, dtype=jnp.int32)
             curr_actions = middle_actions[:, :, t, :]
             next_actions, _ = res_actor.apply_fn(
@@ -136,13 +136,14 @@ def update_clean_critic(
                 {'params': target_critic.params}, next_observations, next_actions, current_times)
             curr_td_err = curr_qs - tgt_qs
             critic_loss += jnp.mean(curr_td_err * curr_td_err)
-            if t == 0 or t == denoise_steps-1:
+            if t == 0 or t == denoise_steps-1 or t == denoise_steps:
                 critic_means.append(curr_qs.mean())
         
         info = {
             "critic_loss": critic_loss,
             "q_0_mean": critic_means[0],
             "q_T_1_mean": critic_means[1],
+            "q_T_mean": critic_means[2],
         }
         return critic_loss, info
 
@@ -172,7 +173,7 @@ def update_clean_critic_wo_actor(
     def critic_loss_fn(params):
         critic_loss = 0.0
         critic_means = []
-        for t in range(denoise_steps):
+        for t in range(denoise_steps+1):
             current_times = jnp.full((batch_size, 1), t, dtype=jnp.int32)
             curr_actions = middle_actions[:, :, t, :]
             next_actions = next_middle_actions[:, :, t, :]
@@ -181,13 +182,14 @@ def update_clean_critic_wo_actor(
                 {'params': target_critic.params}, next_observations, next_actions, current_times)
             curr_td_err = curr_qs - tgt_qs
             critic_loss += jnp.mean(curr_td_err * curr_td_err)
-            if t == 0 or t == denoise_steps-1:
+            if t == 0 or t == denoise_steps-1 or t == denoise_steps:
                 critic_means.append(curr_qs.mean())
         
         info = {
             "critic_loss": critic_loss,
             "q_0_mean": critic_means[0],
             "q_T_1_mean": critic_means[1],
+            "q_T_mean": critic_means[2],
         }
         return critic_loss, info
 
