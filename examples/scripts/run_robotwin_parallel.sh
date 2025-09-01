@@ -8,50 +8,27 @@ proj_name="DSRL_pi0_Robotwin"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "res_H=5000,label=gas_ball,task_suite=lift_pot,max_timesteps=200"
-  "res_H=20000,label=gas_ball,task_suite=lift_pot,max_timesteps=200"
-  "res_H=60000,label=gas_ball,task_suite=lift_pot,max_timesteps=200"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=lift_pot,max_timesteps=200"
+  "label=vanilla,max_timesteps=500,task_suite=stack_bowls_three,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
+  "label=cnr,max_timesteps=500,task_suite=stack_bowls_three"
 
-  # "res_H=5000,label=gas_ball,task_suite=adjust_bottle,max_timesteps=200"
-  # "res_H=20000,label=gas_ball,task_suite=adjust_bottle,max_timesteps=200"
-  # "res_H=60000,label=gas_ball,task_suite=adjust_bottle,max_timesteps=200"
-  # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=adjust_bottle,max_timesteps=200"
+  "label=vanilla,max_timesteps=400,task_suite=hanging_mug,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
+  "label=cnr,max_timesteps=400,task_suite=hanging_mug"
 
-  "res_H=5000,label=gas_ball,task_suite=place_shoe,max_timesteps=300"
-  "res_H=20000,label=gas_ball,task_suite=place_shoe,max_timesteps=300"
-  "res_H=60000,label=gas_ball,task_suite=place_shoe,max_timesteps=300"
-  "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=place_shoe,max_timesteps=300"
+  "label=vanilla,max_timesteps=300,task_suite=stack_blocks_two,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
+  "label=cnr,max_timesteps=300,task_suite=stack_blocks_two"
 
-  # "res_H=5000,label=gas_ball,task_suite=shake_bottle,max_timesteps=300"
-  # "res_H=20000,label=gas_ball,task_suite=shake_bottle,max_timesteps=300"
-  # "res_H=60000,label=gas_ball,task_suite=shake_bottle,max_timesteps=300"
-  # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=shake_bottle,max_timesteps=300"
-
-  # "res_H=5000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
-  # "res_H=20000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
-  # "res_H=60000,label=gas_ball,task_suite=handover_mic,max_timesteps=300"
-  # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=handover_mic,max_timesteps=300"
-
-  # "res_H=5000,label=gas_ball,task_suite=open_laptop,max_timesteps=400"
-  # "res_H=20000,label=gas_ball,task_suite=open_laptop,max_timesteps=400"
-  # "res_H=60000,label=gas_ball,task_suite=open_laptop,max_timesteps=400"
-  # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=open_laptop,max_timesteps=400"
-
-  # "res_H=5000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
-  # "res_H=20000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
-  # "res_H=60000,label=gas_ball,task_suite=stack_bowls_two,max_timesteps=400"
-  # "algorithm=pixel_sac,qwarmup=0,label=vanilla,task_suite=stack_bowls_two,max_timesteps=400"
+  "label=vanilla,max_timesteps=200,task_suite=place_burger_fries,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
+  "label=cnr,max_timesteps=200,task_suite=place_burger_fries"
 )
 host=localhost
 base_port=11451   # 起始端口
 save_dir=/home/wangzh/dsrl_pi0/robotwin_log
 
 per_proc_cap_gb=12
-max_concurrency_per_gpu=4
+max_concurrency_per_gpu=2
 safety_gb=1
 sleep_between_launch=1
-check_interval=3
+check_interval=1
 
 # ====== 新增：进程 PID 记录与 Ctrl+C 杀停 ======
 pids=()
@@ -257,7 +234,7 @@ print(s)
 PY
 }
 
-
+run_ts=$(date "+%Y%m%d_%H%M%S")
 start_task_on_slot() {
   local gpu_id=$1
   local slot=$2
@@ -269,10 +246,9 @@ start_task_on_slot() {
   local ablation_args; ablation_args="$(dict_to_args "$norm_kvs")"
   local tag; tag="$(kv_to_tag "$norm_kvs")"
 
-  local log_dir="logs/ablation_any"
+  local log_dir="logs/ablation_any/${run_ts}"
   mkdir -p "$log_dir"
   local log_file="${log_dir}/${tag}.log"
-  # 如果文件已存在则清空
   : > "$log_file"
 
   local t; t=$(date "+%Y-%m-%d %H:%M:%S")
@@ -300,25 +276,28 @@ start_task_on_slot() {
       --wandb_project ${proj_name} \
       --batch_size 256 \
       --discount 0.999 \
-      --max_steps 200000 \
+      --max_steps 500000 \
       --eval_interval 5000 \
       --log_interval 500 \
       --eval_episodes 10 \
-      --start_online_updates 100 \
+      --start_online_updates 500 \
       --resize_image 64 \
       --action_magnitude 1.0 \
-      --query_freq 50 \
-      --hidden_dims 128 \
-      --task_suite lift_pot \
-      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_robotwin_clean/30000 \
-      --pi0_config pi0_robotwin_clean \
+      --query_freq 20 \
+      --task_suite stack_bowls_two \
+      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_robotwin_clean_noopt/30000/30000 \
+      --pi0_config pi0_robotwin_clean_noopt \
       --eval_at_begin 1 \
       --qwarmup 1 \
-      --kl_coeff 0.0 \
+      --kl_coeff 1.0 \
       --res_coeff 0.1 \
       --max_timesteps 300 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
+    status=$?
+    if (( status != 0 )); then
+      echo "❌ [$(date '+%Y-%m-%d %H:%M:%S')] 任务崩溃: GPU=$gpu_id, ablation={$kvs}, exit_code=$status" | tee -a "$log_file"
+    fi
   ) &
   pid=$!
   # 额外记录进程组，便于一刀切
