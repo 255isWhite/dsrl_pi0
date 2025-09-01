@@ -222,6 +222,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
             actions=actions[t],
             next_actions=actions[t + 1] if t < episode_len - 1 else actions[t],
             norm_actions=norm_actions[t],
+            next_norm_actions=norm_actions[t + 1] if t < episode_len - 1 else norm_actions[t],
             clean_actions=clean_actions[t],
             actual_norm_actions=actual_norm_actions[t],
             next_actual_norm_actions=actual_norm_actions[t + 1] if t < episode_len - 1 else actual_norm_actions[t],
@@ -298,7 +299,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             rng, key = jax.random.split(rng)
             rand_val = jax.random.uniform(key, ())
             if rand_val < res_prob and use_res:
-                actions = action_dict["norm_actions"]+ res_coeff * agent.sample_residual_actions(obs_dict)
+                actions = action_dict["norm_actions"]+ res_coeff * agent.sample_residual_actions(obs_dict,action_dict["norm_actions"][0][None,:])
                 actual_norm_action = actions.copy()
                 actions = dp_unnorm_transform({'actions': actions})['actions']
             else:
@@ -429,7 +430,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 rng, key = jax.random.split(rng)
                 rand_val = jax.random.uniform(key, ())
                 if rand_val < res_prob and use_res:
-                    actions = action_dict["norm_actions"]+ res_coeff * agent.sample_residual_actions(obs_dict)
+                    actions = action_dict["norm_actions"]+ res_coeff * agent.sample_residual_actions(obs_dict,action_dict["norm_actions"][0][None,:])
                     actions = dp_unnorm_transform({'actions': actions})['actions']
                 else:
                     actions = action_dict["actions"]

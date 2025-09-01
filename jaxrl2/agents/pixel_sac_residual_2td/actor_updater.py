@@ -105,9 +105,9 @@ def update_res_actor(key: PRNGKey, res_actor: TrainState, clean_critic: TrainSta
     def res_actor_loss_fn(
             res_actor_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
         if hasattr(res_actor, 'batch_stats') and res_actor.batch_stats is not None:
-            res_actions, raw_means, new_model_state = res_actor.apply_fn({'params': res_actor_params, 'batch_stats': res_actor.batch_stats}, batch['observations'], mutable=['batch_stats'])
+            res_actions, raw_means, new_model_state = res_actor.apply_fn({'params': res_actor_params, 'batch_stats': res_actor.batch_stats}, batch['observations'], batch['norm_actions'], mutable=['batch_stats'])
         else: 
-            res_actions, raw_means = res_actor.apply_fn({'params': res_actor_params}, batch['observations'])
+            res_actions, raw_means = res_actor.apply_fn({'params': res_actor_params}, batch['observations'], batch['norm_actions'])
             new_model_state = {}
 
         actions = batch['norm_actions'].reshape(res_actions.shape[0],-1) + res_actions * res_coeff

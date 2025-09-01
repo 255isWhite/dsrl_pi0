@@ -13,62 +13,31 @@ proj_name="DSRL_pi0_Libero"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=2"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=2"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=2"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=2"
-  "algorithm=pixel_sac,label=gas_ball,task_id=2"
+  # "label=cnr,task_id=7,task_suite=libero_10,res_H=20000"
+  # "label=cnr,task_id=9,task_suite=libero_10,res_H=20000"
+  # "label=cnr,task_id=2,task_suite=libero_spatial,res_H=20000"
+  # "label=cnr,task_id=4,task_suite=libero_spatial,res_H=20000"
+  # "label=cnr,task_id=6,task_suite=libero_object,res_H=20000"
+  # "label=cnr,task_id=8,task_suite=libero_object,res_H=20000"
 
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=4"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=4"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=4"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=4"
-  "algorithm=pixel_sac,label=gas_ball,task_id=4"
+  "label=cond_action,task_id=8,task_suite=libero_goal,res_H=20000"
+  "label=cond_action,task_id=8,task_suite=libero_goal,res_H=40000"
+  "label=cond_action,task_id=8,task_suite=libero_goal,res_H=60000"
+  "label=cond_action,task_id=8,task_suite=libero_goal,res_H=80000"
 
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=6,task_suite=libero_object"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=6,task_suite=libero_object"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=6,task_suite=libero_object"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=6,task_suite=libero_object"
-  "algorithm=pixel_sac,label=gas_ball,task_id=6,task_suite=libero_object"
 
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=8,task_suite=libero_object"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=8,task_suite=libero_object"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=8,task_suite=libero_object"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=8,task_suite=libero_object"
-  "algorithm=pixel_sac,label=gas_ball,task_id=8,task_suite=libero_object"
-
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=4,task_suite=libero_goal"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=4,task_suite=libero_goal"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=4,task_suite=libero_goal"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=4,task_suite=libero_goal"
-  "algorithm=pixel_sac,label=gas_ball,task_id=4,task_suite=libero_goal"
-
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=8,task_suite=libero_goal"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=8,task_suite=libero_goal"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=8,task_suite=libero_goal"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=8,task_suite=libero_goal"
-  "algorithm=pixel_sac,label=gas_ball,task_id=8,task_suite=libero_goal"
-
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=2,task_suite=libero_90"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=2,task_suite=libero_90"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=2,task_suite=libero_90"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=2,task_suite=libero_90"
-  "algorithm=pixel_sac,label=gas_ball,task_id=2,task_suite=libero_90"
-
-  "res_H=20000,decay_kl=1,label=gas_ball,task_id=9,task_suite=libero_90"
-  "res_H=60000,decay_kl=1,label=gas_ball,task_id=9,task_suite=libero_90"
-  "res_H=20000,decay_kl=0,label=gas_ball,task_id=9,task_suite=libero_90"
-  "res_H=60000,decay_kl=0,label=gas_ball,task_id=9,task_suite=libero_90"
-  "algorithm=pixel_sac,label=gas_ball,task_id=9,task_suite=libero_90"
-
+  "label=cond_action,task_id=4,task_suite=libero_goal,res_H=20000"
+  "label=cond_action,task_id=4,task_suite=libero_goal,res_H=40000"
+  "label=cond_action,task_id=4,task_suite=libero_goal,res_H=60000"
+  "label=cond_action,task_id=4,task_suite=libero_goal,res_H=80000"
 )
 
 
-per_proc_cap_gb=13
-max_concurrency_per_gpu=5
+per_proc_cap_gb=12
+max_concurrency_per_gpu=6
 safety_gb=1
 sleep_between_launch=1
-check_interval=3
+check_interval=0
 
 export DISPLAY=:0
 export MUJOCO_GL=egl
@@ -253,20 +222,16 @@ start_task_on_slot() {
       --prefix "${tag}_G${gpu_id}" \
       --wandb_project ${proj_name} \
       --batch_size 256 \
-      --discount 0.999 \
       --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
       --eval_episodes 10 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
-      --resize_image 64 \
-      --action_magnitude 1.0 \
       --query_freq 20 \
-      --hidden_dims 128 \
       --task_id 21 \
-      --task_suite libero_spatial \
-      --pi0_model /mnt/ssd1/data/zh1/pi0/checkpoints/pi0_libero130_1shot/libero130_1shot/20000 \
+      --task_suite libero_90 \
+      --pi0_model /data0/pi0/libero_130_1shot_2w \
       --pi0_config pi0_libero130_1shot \
       --eval_at_begin 1 \
       --qwarmup 1 \
@@ -275,19 +240,14 @@ start_task_on_slot() {
       --max_timesteps 400 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
-  ) &
-  pid=$!
-  pgid="$(ps -o pgid= "$pid" | tr -d ' ')"
-  pids+=("$pid:$pgid")
-
-  # === 新增监控协程 ===
-  (
-    wait $pid
     status=$?
     if (( status != 0 )); then
       echo "❌ [$(date '+%Y-%m-%d %H:%M:%S')] 任务崩溃: GPU=$gpu_id, ablation={$kvs}, exit_code=$status" | tee -a "$log_file"
     fi
   ) &
+  pid=$!
+  pgid="$(ps -o pgid= "$pid" | tr -d ' ')"
+  pids+=("$pid:$pgid")
 }
 
 

@@ -327,7 +327,7 @@ class PixelSACResidualLearner2TD(Agent):
                                      use_bottleneck=use_bottleneck
                                      )
         print(res_actor_def)
-        res_actor_def_init = res_actor_def.init(res_actor_key, observations)
+        res_actor_def_init = res_actor_def.init(res_actor_key, observations, actions[..., :self.magic_dim])
         res_actor_params = res_actor_def_init['params']
         res_actor_batch_stats = res_actor_def_init['batch_stats'] if 'batch_stats' in res_actor_def_init else None
 
@@ -457,9 +457,9 @@ class PixelSACResidualLearner2TD(Agent):
         self._temp = output_dict['temp']
         print('restored from ', dir)
         
-    def sample_residual_actions(self, observations: np.ndarray) -> np.ndarray:
+    def sample_residual_actions(self, observations: np.ndarray, norm_actions: np.ndarray) -> np.ndarray:
         rng, actions = sample_deterministic_actions_jit(self._rng, self._res_actor.apply_fn,
-                                          self._res_actor.params, observations, get_batch_stats(self._res_actor))
+                                          self._res_actor.params, observations, norm_actions, get_batch_stats(self._res_actor))
 
         self._rng = rng
         return np.asarray(actions)

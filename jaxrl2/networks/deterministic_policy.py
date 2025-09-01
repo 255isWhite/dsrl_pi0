@@ -16,12 +16,13 @@ class DeterministicPolicy(nn.Module):
     @nn.compact
     def __call__(self,
                  observations: jnp.ndarray,
+                 actions: jnp.ndarray,
                  training: bool = False,
                  ) -> distrax.Distribution:
+        inputs = {'states': observations, 'actions': actions}
         outputs = MLP(self.hidden_dims,
                       activate_final=True,
-                      dropout_rate=self.dropout_rate)(observations,
-                                                      training=training)
+                      dropout_rate=self.dropout_rate)(inputs, training=training)
 
         raw_means = nn.Dense(self.action_dim, kernel_init=default_init(1e-2))(outputs)
         actions = jnp.tanh(raw_means) * self.action_magnitude

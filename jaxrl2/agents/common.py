@@ -102,11 +102,12 @@ def sample_deterministic_actions_jit(
         rng: PRNGKey, actor_apply_fn: Callable[..., distrax.Distribution],
         actor_params: Params,
         observations: np.ndarray,
+        norm_actions: np.ndarray,
         actor_batch_stats: Any) -> Tuple[PRNGKey, jnp.ndarray]:
     input_collections = {'params': actor_params}
     if actor_batch_stats is not None:
         input_collections['batch_stats'] = actor_batch_stats
-    actions, raw_means = actor_apply_fn(input_collections, observations)
+    actions, raw_means = actor_apply_fn(input_collections, observations, norm_actions)
     rng, key = jax.random.split(rng)
     return rng, actions
 
