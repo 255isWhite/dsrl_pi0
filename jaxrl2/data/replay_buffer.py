@@ -27,11 +27,12 @@ def _init_replay_dict(obs_space: gym.Space,
 
 class ReplayBuffer(Dataset):
     
-    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, ):
+    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, chunk_length: int = 1, res_action_dim: int = 4):
         self.observation_space = observation_space
         self.action_space = action_space
         self.capacity = capacity
-        self.magic_shape = (self.action_space.shape[0], 7)
+        self.chunk_length = chunk_length
+        self.magic_shape = (chunk_length, res_action_dim)
 
         print("making replay buffer of capacity ", self.capacity)
 
@@ -40,6 +41,7 @@ class ReplayBuffer(Dataset):
         actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
         next_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
         norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
+        next_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         next_actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
@@ -53,6 +55,7 @@ class ReplayBuffer(Dataset):
             'actions': actions,
             'next_actions': next_actions,
             'norm_actions': norm_actions,
+            'next_norm_actions': next_norm_actions,
             'clean_actions': clean_actions,
             'actual_norm_actions': actual_norm_actions,
             'next_actual_norm_actions': next_actual_norm_actions,
@@ -88,6 +91,7 @@ class ReplayBuffer(Dataset):
         masks_list = []
         discount_list = []
         norm_actions_list = []
+        next_norm_actions_list = []
         clean_actions_list = []
         actual_norm_actions_list = []
         next_actual_norm_actions_list = []
@@ -108,6 +112,7 @@ class ReplayBuffer(Dataset):
             
             actions_list.append(self.data['actions'][start:end])
             norm_actions_list.append(self.data['norm_actions'][start:end])
+            next_norm_actions_list.append(self.data['next_norm_actions'][start:end])
             clean_actions_list.append(self.data['clean_actions'][start:end])
             actual_norm_actions_list.append(self.data['actual_norm_actions'][start:end])
             next_actual_norm_actions_list.append(self.data['next_actual_norm_actions'][start:end])
@@ -122,6 +127,7 @@ class ReplayBuffer(Dataset):
             'next_observations': next_observations_list,
             'actions': actions_list,
             'norm_actions': norm_actions_list,
+            'next_norm_actions': next_norm_actions_list,
             'clean_actions': clean_actions_list,
             'actual_norm_actions': actual_norm_actions_list,
             'next_actual_norm_actions': next_actual_norm_actions_list,
@@ -138,6 +144,7 @@ class ReplayBuffer(Dataset):
             next_observations = _init_replay_dict(self.observation_space, self.capacity)
             actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
             norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
+            next_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
             clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
             actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
             next_actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
@@ -151,6 +158,7 @@ class ReplayBuffer(Dataset):
                 'next_observations': next_observations,
                 'actions': actions,
                 'norm_actions': norm_actions,
+                'next_norm_actions': next_norm_actions,
                 'clean_actions': clean_actions,
                 'actual_norm_actions': actual_norm_actions,
                 'next_actual_norm_actions': next_actual_norm_actions,

@@ -222,6 +222,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
             actions=actions[t],
             next_actions=actions[t + 1] if t < episode_len - 1 else actions[t],
             norm_actions=norm_actions[t],
+            next_norm_actions=norm_actions[t + 1] if t < episode_len - 1 else norm_actions[t],
             clean_actions=clean_actions[t],
             actual_norm_actions=actual_norm_actions[t],
             next_actual_norm_actions=actual_norm_actions[t + 1] if t < episode_len - 1 else actual_norm_actions[t],
@@ -242,6 +243,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     
     if 'libero' in variant.env:
         obs = env.reset()
+        action_real_dim = 7
     elif 'aloha' in variant.env:
         obs, _ = env.reset()
     
@@ -298,18 +300,18 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             rng, key = jax.random.split(rng)
             rand_val = jax.random.uniform(key, ())
             if rand_val < res_prob and use_res:
-                actions = action_dict["norm_actions"]+ res_coeff * agent.sample_residual_actions(obs_dict)
+                actions = action_dict["norm_actions"][:query_frequency]+ res_coeff * agent.sample_residual_actions(obs_dict, action_real_dim).squeeze(0)
                 actual_norm_action = actions.copy()
                 actions = dp_unnorm_transform({'actions': actions})['actions']
             else:
-                actions = action_dict["actions"]
-                actual_norm_action = action_dict["norm_actions"]
+                actions = action_dict["actions"][:query_frequency]
+                actual_norm_action = action_dict["norm_actions"][:query_frequency]
             
             action_list.append(actions_noise)
             obs_list.append(obs_dict)
-            norm_action_list.append(jnp.expand_dims(action_dict["norm_actions"][0], axis=0))
-            clean_action_list.append(jnp.expand_dims(action_dict["actions"][0], axis=0))
-            actual_norm_action_list.append(jnp.expand_dims(actual_norm_action[0], axis=0))
+            norm_action_list.append(action_dict["norm_actions"][:query_frequency])
+            clean_action_list.append(action_dict["actions"][:query_frequency])
+            actual_norm_action_list.append(actual_norm_action)
             
         action_t = actions[t % query_frequency]
         if 'libero' in variant.env:
@@ -383,6 +385,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
     for rollout_id in range(variant.eval_episodes):
         if 'libero' in variant.env:
             obs = env.reset()
+            action_real_dim = 7
         elif 'aloha' in variant.env:
             obs, _ = env.reset()
             
@@ -429,7 +432,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 rng, key = jax.random.split(rng)
                 rand_val = jax.random.uniform(key, ())
                 if rand_val < res_prob and use_res:
-                    actions = action_dict["norm_actions"]+ res_coeff * agent.sample_residual_actions(obs_dict)
+                    actions = action_dict["norm_actions"][:query_frequency]+ res_coeff * agent.sample_residual_actions(obs_dict, action_real_dim).squeeze(0)
                     actions = dp_unnorm_transform({'actions': actions})['actions']
                 else:
                     actions = action_dict["actions"]

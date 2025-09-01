@@ -111,9 +111,9 @@ def update_clean_critic(
     
     res_actions, raw_means = res_actor.apply_fn({'params': res_actor.params}, batch['observations'])
     next_res_actions, next_raw_means = res_actor.apply_fn({'params': res_actor.params}, batch['next_observations'])
-    next_actual_norm_actions = batch['next_actual_norm_actions'].reshape(next_res_actions.shape[0], -1)
+    next_norm_actions = batch['next_norm_actions'].reshape(next_res_actions.shape[0], -1)
     next_qs = target_clean_critic.apply_fn({'params': target_clean_critic.params},
-                                     batch['next_observations'], next_res_actions + next_actual_norm_actions)
+                                     batch['next_observations'], next_res_actions + next_norm_actions)
     
     if critic_reduction == 'min':
         next_q = next_qs.min(axis=0)
