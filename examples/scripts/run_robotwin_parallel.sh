@@ -8,17 +8,16 @@ proj_name="DSRL_pi0_Robotwin"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=vanilla,max_timesteps=500,task_suite=stack_bowls_three,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
-  "label=cnr,max_timesteps=500,task_suite=stack_bowls_three"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=100000"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=300000"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=500000"
 
-  "label=vanilla,max_timesteps=400,task_suite=hanging_mug,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
-  "label=cnr,max_timesteps=400,task_suite=hanging_mug"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.01"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.05"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.0"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.3"
 
-  "label=vanilla,max_timesteps=300,task_suite=stack_blocks_two,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
-  "label=cnr,max_timesteps=300,task_suite=stack_blocks_two"
-
-  "label=vanilla,max_timesteps=200,task_suite=place_burger_fries,qwarmup=0,algorithm=pixel_sac,kl_coeff=0.0"
-  "label=cnr,max_timesteps=200,task_suite=place_burger_fries"
+  "label=0903,task_suite=place_cans_plasticbox,kl_coeff=0.0,algorithm=pixel_sac"
 )
 host=localhost
 base_port=11451   # 起始端口
@@ -277,21 +276,19 @@ start_task_on_slot() {
       --batch_size 256 \
       --discount 0.999 \
       --max_steps 500000 \
-      --eval_interval 5000 \
+      --eval_interval 10000 \
       --log_interval 500 \
       --eval_episodes 10 \
       --start_online_updates 500 \
-      --resize_image 64 \
-      --action_magnitude 1.0 \
       --query_freq 20 \
-      --task_suite stack_bowls_two \
-      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_robotwin_clean_noopt/30000/30000 \
+      --task_suite place_cans_plasticbox \
+      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_robotwin_clean_noopt/50000 \
       --pi0_config pi0_robotwin_clean_noopt \
       --eval_at_begin 1 \
       --qwarmup 1 \
       --kl_coeff 1.0 \
       --res_coeff 0.1 \
-      --max_timesteps 300 \
+      --max_timesteps 500 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?

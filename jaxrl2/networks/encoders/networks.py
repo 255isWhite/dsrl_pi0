@@ -62,3 +62,41 @@ class PixelMultiplexer(nn.Module):
             return self.network(x, training=training)
         else:
             return self.network(x, actions, training=training)
+
+
+class LargePixelMultiplexer(nn.Module):
+    encoder: Union[nn.Module, list]
+    network: nn.Module
+    latent_dim: int
+    use_bottleneck: bool=True
+
+    @nn.compact
+    def __call__(self,
+                 observations: Union[FrozenDict, Dict],
+                 actions: Optional[jnp.ndarray] = None,
+                 training: bool = False):
+        observations = FrozenDict(observations)
+
+        x = self.encoder(observations['pixels'], training)
+        if self.use_bottleneck:
+            x = nn.Dense(self.latent_dim * 1, kernel_init=xavier_init())(x)
+            x = nn.LayerNorm()(x)
+            x = nn.tanh(x)
+        x = observations.copy(add_or_replace={'pixels': x})
+
+        y = observations['state']
+        y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
+        y = nn.LayerNorm()(y)
+        y = nn.tanh(y)
+        x = x.copy(add_or_replace={'state': y})
+        
+        if actions is not None:
+            actions = nn.Dense(self.latent_dim, kernel_init=xavier_init())(actions)
+            actions = nn.LayerNorm()(actions)
+            actions = nn.tanh(actions)
+
+        # print('fully connected keys', x.keys())
+        if actions is None:
+            return self.network(x, training=training)
+        else:
+            return self.network(x, actions, training=training)

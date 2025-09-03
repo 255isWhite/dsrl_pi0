@@ -134,6 +134,7 @@ def main(variant):
         eval_env = env
         variant.task_description = task_description
         variant.env_max_reward = 1
+        res_action_dim = 7
     elif variant.env == 'aloha_cube':
         from gymnasium.envs.registration import register
         register(
@@ -150,6 +151,7 @@ def main(variant):
         env = ClientEnv(variant.client_addr)
         eval_env = env
         variant.env_max_reward = 1
+        res_action_dim = 14
 
     group_name = variant.prefix + '_' + variant.launch_group_id
     group_name = safe_group_name(group_name, max_len=120)
@@ -182,12 +184,12 @@ def main(variant):
         agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
     elif variant.algorithm == 'pixel_sac_residual_2td':
         print("Using residual 2TD learner")
-        agent = PixelSACResidualLearner2TD(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
+        agent = PixelSACResidualLearner2TD(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, chunk_len=variant.query_freq, res_action_dim=res_action_dim, residual_hidden_dim=variant.residual_hidden_dim, **kwargs)
     else:
         raise NotImplementedError(f"Unknown algorithm {variant.algorithm}, current supported algorithms are pixel_sac, pixel_sac_residual, pixel_sac_residual_2td")
     
     online_buffer_size = variant.max_steps  // variant.multi_grad_step
-    online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size))
+    online_replay_buffer = ReplayBuffer(dummy_env.observation_space, dummy_env.action_space, int(online_buffer_size), variant.query_freq, res_action_dim)
     replay_buffer = online_replay_buffer
     replay_buffer.seed(variant.seed)
     trajwise_alternating_training_loop(variant, agent, env, eval_env, online_replay_buffer, replay_buffer, wandb_logger, shard_fn=shard_fn, agent_dp=agent_dp, eval_at_begin=variant.eval_at_begin, dp_unnorm_transform=dp_unnorm_transform)

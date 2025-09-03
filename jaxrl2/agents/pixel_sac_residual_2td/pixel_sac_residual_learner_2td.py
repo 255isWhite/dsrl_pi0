@@ -20,7 +20,7 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
@@ -39,6 +39,9 @@ from jaxrl2.agents.common import sample_deterministic_actions_jit
 
 class TrainState(train_state.TrainState):
     batch_stats: Any
+
+def count_parameters(params):
+    return sum(np.prod(p.shape) for p in jax.tree_util.tree_leaves(params))
 
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
 def _update_jit(
@@ -209,6 +212,9 @@ class PixelSACResidualLearner2TD(Agent):
                  dp_unnorm_transform = None,
                  td3_noise_scale: float = 0.2,
                  decay_kl: int = 0,
+                 chunk_len: int = 20,
+                 res_action_dim: int = 7,
+                 residual_hidden_dim: int = 128,
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -220,7 +226,10 @@ class PixelSACResidualLearner2TD(Agent):
 
         self.action_dim = np.prod(actions.shape[-2:])
         self.action_chunk_shape = actions.shape[-2:]
-        self.magic_dim = 14
+        self.chunk_len = chunk_len
+        # self.res_action_dim = res_action_dim
+        self.res_action_dim = self.chunk_len * res_action_dim
+        self.residual_hidden_dim = residual_hidden_dim
 
         self.tau = tau
         self.discount = discount
@@ -320,10 +329,10 @@ class PixelSACResidualLearner2TD(Agent):
         print(self.critic_reduction)
         
         # residual head part
-        res_policy_def = DeterministicPolicy(hidden_dims, self.magic_dim, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
-        res_actor_def = PixelMultiplexer(encoder=encoder_def,
+        res_policy_def = DeterministicPolicy(hidden_dims, self.res_action_dim, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
+        res_actor_def = LargePixelMultiplexer(encoder=encoder_def,
                                      network=res_policy_def,
-                                     latent_dim=latent_dim,
+                                     latent_dim=self.residual_hidden_dim,
                                      use_bottleneck=use_bottleneck
                                      )
         print(res_actor_def)
@@ -337,13 +346,13 @@ class PixelSACResidualLearner2TD(Agent):
                                   batch_stats=res_actor_batch_stats)
 
         clean_critic_def = StateActionEnsemble(hidden_dims, num_qs=num_qs)
-        clean_critic_def = PixelMultiplexer(encoder=encoder_def,
+        clean_critic_def = LargePixelMultiplexer(encoder=encoder_def,
                                       network=clean_critic_def,
-                                      latent_dim=latent_dim,
+                                      latent_dim=self.residual_hidden_dim,
                                       use_bottleneck=use_bottleneck
                                       )
         print(clean_critic_def)
-        magic_actions = actions[..., :self.magic_dim]
+        magic_actions = np.zeros((observations['pixels'].shape[0], self.res_action_dim))
         clean_critic_def_init = clean_critic_def.init(clean_critic_key, observations, magic_actions)
         self._critic_init_params = clean_critic_def_init['params']
 
@@ -359,6 +368,13 @@ class PixelSACResidualLearner2TD(Agent):
         self._res_actor = res_actor
         self._clean_critic = clean_critic
         self._clean_target_critic_params = clean_target_critic_params
+        
+        print(f"Counting parameters...\n"
+              f"actor: {count_parameters(actor_params)}\n"
+              f"critic: {count_parameters(critic_params)}\n"
+              f"res_actor: {count_parameters(res_actor_params)}\n"
+              f"clean_critic: {count_parameters(clean_critic_params)}\n"
+              )
         
         
 
@@ -457,12 +473,12 @@ class PixelSACResidualLearner2TD(Agent):
         self._temp = output_dict['temp']
         print('restored from ', dir)
         
-    def sample_residual_actions(self, observations: np.ndarray) -> np.ndarray:
+    def sample_residual_actions(self, observations: np.ndarray, action_dim: int) -> np.ndarray:
         rng, actions = sample_deterministic_actions_jit(self._rng, self._res_actor.apply_fn,
                                           self._res_actor.params, observations, get_batch_stats(self._res_actor))
-
+        
         self._rng = rng
-        return np.asarray(actions)
+        return np.asarray(actions).reshape(*actions.shape[:-1], -1, action_dim)
         
     
 @functools.partial(jax.jit)

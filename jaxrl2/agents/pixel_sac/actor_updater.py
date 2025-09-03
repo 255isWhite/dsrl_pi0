@@ -61,7 +61,7 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         tar_norm = actions.shape[-1]
         ac_norm = jnp.linalg.norm(actions, axis=-1)  # [batch]
         kl_loss = jnp.mean(0.5 * ac_norm**2 - (tar_norm - 1) * jnp.log(ac_norm + 1e-8))
-        
+
         actor_loss = actor_loss + kl_loss * kl_coeff
 
         things_to_log = {

@@ -25,8 +25,8 @@ if __name__ == '__main__':
     parser.add_argument('--prefix', default='', help='prefix to use for wandb')
     parser.add_argument('--suffix', default='', help='suffix to use for wandb')
     parser.add_argument('--multi_grad_step', default=1, help='Number of graident steps to take per environment step, aka UTD', type=int)
-    parser.add_argument('--resize_image', default=-1, help='the size of image if need resizing', type=int)
-    parser.add_argument('--query_freq', default=1, help='query frequency', type=int)
+    parser.add_argument('--resize_image', default=64, help='the size of image if need resizing', type=int)
+    parser.add_argument('--query_freq', default=20, help='query frequency', type=int)
     parser.add_argument('--task_id', default=57, help='task id for libero environment', type=int)
     parser.add_argument('--task_suite', default='libero_90', help='task suite for libero environment', type=str)
     parser.add_argument('--pi0_model', default='pi0_libero', help='which pi0 model to use', type=str)
@@ -40,11 +40,11 @@ if __name__ == '__main__':
     parser.add_argument('--res_H', default=100_000, help='horizon for residual action', type=int)
     parser.add_argument('--td3_noise_scale', default=0.2, help='TD3 noise scale', type=float)
     parser.add_argument('--label', default='', help='label for wandb run', type=str)
-    parser.add_argument('--action_magnitude', default=1.0, help='magnitude of actions', type=float)
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
     parser.add_argument('--save_dir', default='./videos', help='directory to save videos and logs', type=str)
     parser.add_argument('--client_addr', default='localhost:8080', help='address for robotwin client', type=str)
+    parser.add_argument('--residual_hidden_dim', default=256, help='hidden dim for residual policy and Q', type=int)
     
     train_args_dict = dict(
         actor_lr=1e-4,
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         softmax_temperature=-1,
         target_entropy='auto',
         num_qs=10,
-        # action_magnitude=1.0,
+        action_magnitude=1.0,
         num_cameras=1,
         )
 
