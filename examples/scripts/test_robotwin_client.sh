@@ -6,25 +6,25 @@ unset CUDA_VISIBLE_DEVICES
 proj_name="DSRL_pi0_Robotwin"
 # gpu_list=(2 3)                          # 物理 GPU ID
 
-gpu_list=(0 1 2 3 4 5 6 7)                         # 物理 GPU ID
+gpu_list=(6)                          # 物理 GPU ID
 ablations=(
-  "label=small_abs,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.01,max_timesteps=300"
-  "label=small_abs,task_suite=hanging_mug,res_H=100000,res_coeff=0.01,max_timesteps=300"
-  "label=small_abs,task_suite=stack_blocks_two,res_H=100000,res_coeff=0.01,max_timesteps=300"
-  "label=small_abs,task_suite=place_burger_fries,res_H=100000,res_coeff=0.01,max_timesteps=200"
+  "label=0903,task_suite=place_cans_plasticbox,res_H=100000"
+  # "label=0903,task_suite=place_cans_plasticbox,res_H=300000"
+  # "label=0903,task_suite=place_cans_plasticbox,res_H=500000"
 
-  "label=small_abs,task_suite=place_cans_plasticbox,max_timesteps=300,algorithm=pixel_sac,kl_coeff=0.0,qwarmup=0"
-  "label=small_abs,task_suite=hanging_mug,max_timesteps=300,algorithm=pixel_sac,kl_coeff=0.0,qwarmup=0"
-  "label=small_abs,task_suite=stack_blocks_two,max_timesteps=300,algorithm=pixel_sac,kl_coeff=0.0,qwarmup=0"
-  "label=small_abs,task_suite=place_burger_fries,max_timesteps=200,algorithm=pixel_sac,kl_coeff=0.0,qwarmup=0"
+  # "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.01"
+  # "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.05"
+  # "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.0"
+  # "label=0903,task_suite=place_cans_plasticbox,res_H=100000,res_coeff=0.3"
+
+  # "label=0903,task_suite=place_cans_plasticbox,kl_coeff=0.0,algorithm=pixel_sac"
 )
-
 host=localhost
-base_port=11451   # 起始端口
+base_port=21451   # 起始端口
 save_dir=/home/wangzh/dsrl_pi0/robotwin_log
 
 per_proc_cap_gb=12
-max_concurrency_per_gpu=4
+max_concurrency_per_gpu=2
 safety_gb=1
 sleep_between_launch=1
 check_interval=1
@@ -97,8 +97,8 @@ for i in "${!ablations[@]}"; do
         --gpu_id $gpu_id \
         --task_name $task_name \
         --save_dir $save_dir \
-        --mode "abs_joint" \
-        > "$log_file" 2>&1 &
+        --mode "delta_joint"
+        # > "$log_file" 2>&1 &
 
     pid=$!
     # 额外记录进程组，便于一刀切
@@ -108,7 +108,7 @@ for i in "${!ablations[@]}"; do
     sleep 1
 done
 
-# sleep 100000000
+sleep 100000000
 
 # print new ablation
 echo "新 ablations 列表："
@@ -277,20 +277,19 @@ start_task_on_slot() {
       --wandb_project ${proj_name} \
       --batch_size 256 \
       --discount 0.999 \
-      --max_steps 1500000 \
+      --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
       --eval_episodes 10 \
       --start_online_updates 500 \
       --query_freq 20 \
       --task_suite place_cans_plasticbox \
-      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_robotwin_clean_noopt/30000/30000 \
+      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_robotwin_clean_noopt/50000 \
       --pi0_config pi0_robotwin_clean_noopt \
       --eval_at_begin 1 \
       --qwarmup 1 \
       --kl_coeff 1.0 \
-      --res_coeff 0.01 \
-      --res_H 100000 \
+      --res_coeff 0.1 \
       --max_timesteps 500 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1

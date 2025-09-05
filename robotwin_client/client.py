@@ -130,6 +130,7 @@ class RoboTwinEnv:
 	@run_in_robotwin
 	def __init__(self, task_name: str, **kwargs):
 		self.env, self.env_config = create_robotwin_env(task_name)
+		self.mode = kwargs.get("mode", "abs_joint")  # abs_joint or delta_joint
   
 		current_time = get_safe_timestamp()
 		self.save_dir = kwargs.get("save_dir", "./robotwin_log")
@@ -194,7 +195,24 @@ class RoboTwinEnv:
 		self.current_video_name = f"{self.env.eval_video_path}/{self.task_name}_{current_time}.mp4"
 
 	def step(self, action):
-		self.env.take_action(action)
+		if self.mode == "delta_joint":
+			current_joint_dict = self.env.get_qpos()
+			current_joint = np.concatenate(
+				[
+					current_joint_dict["left_arm"],
+					[current_joint_dict["left_gripper"]],
+					current_joint_dict["right_arm"],
+					[current_joint_dict["right_gripper"]],
+				]
+			)
+			print(f"current joint: {current_joint}")
+			abs_action = current_joint + action
+			abs_action[6] = action[6]  # gripper open/close
+			abs_action[13] = action[13]  # gripper open/close
+			print(f"action: {action}")
+			print(f"abs action: {abs_action}")
+   
+		self.env.take_action(abs_action if self.mode == "delta_joint" else action)
 		done = self.env.eval_success
 		self.current_success = done
 		# obs = self.env.get_obs()
@@ -253,42 +271,46 @@ class ClientModel:
 	def run(self):
 		print(f"[Server] Started at tcp://{self.host}:{self.port}")
 		while True:
-			message = self.socket.recv()
-			data = pickle.loads(message)
-			command = data.get('command')
-			print(f"[Server] Received command={command}, keys={list(data.keys())}")
+			try:
+				message = self.socket.recv()
+				try:
+					data = pickle.loads(message)
+				except Exception as e:
+					print(f"[Server] Failed to decode pickle: {e}")
+					self.socket.send(pickle.dumps({"error": "Invalid pickle"}))
+					continue
 
-			t0 = time.time() * 1000  # ms
+				command = data.get('command')
+				print(f"[Server] Received command={command}, keys={list(data.keys())}")
 
-			if command == 'reset':
-				t1 = time.time() * 1000
-				obs, instruction = self.env.reset()
-				t2 = time.time() * 1000
-				print(f"[Server] env.reset()耗时 {t2 - t1:.2f} ms")
-				response = {'obs': obs, 'instruction': instruction}
+				t0 = time.time() * 1000
+				if command == 'reset':
+					obs, instruction = self.env.reset()
+					response = {'obs': obs, 'instruction': instruction}
+				elif command == 'step':
+					action = data.get('action')
+					if action is None:
+						response = {"error": "Missing action"}
+					else:
+						obs, done = self.env.step(action)
+						response = {'obs': obs, 'done': done}
+				elif command == 'get_obs':
+					obs = self.env.get_obs()
+					response = {'obs': obs}
+				else:
+					response = {'error': f'Unknown command {command}'}
 
-			elif command == 'step':
-				action = data.get('action')
-				t1 = time.time() * 1000
-				obs, done = self.env.step(action)
-				t2 = time.time() * 1000
-				print(f"[Server] env.step()耗时 {t2 - t1:.2f} ms")
-				response = {'obs': obs, 'done': done}
+				t3 = time.time() * 1000
+				print(f"[Server] Responding keys={list(response.keys())}, 总耗时={t3 - t0:.2f} ms")
+				self.socket.send(pickle.dumps(response))
 
-			elif command == 'get_obs':
-				t1 = time.time() * 1000
-				obs = self.env.get_obs()
-				t2 = time.time() * 1000
-				print(f"[Server] env.get_obs()耗时 {t2 - t1:.2f} ms")
-				response = {'obs': obs}
-
-			else:
-				response = {'error': 'Unknown command'}
-
-			t3 = time.time() * 1000
-			print(f"[Server] Responding keys={list(response.keys())}, "
-				  f"types={[type(v) for v in response.values()]}, 总耗时={t3 - t0:.2f} ms")
-			self.socket.send(pickle.dumps(response))
+			except Exception as e:
+				print(f"[Server] Top-level error: {e}")
+				# 保证不会挂，返回错误信息
+				try:
+					self.socket.send(pickle.dumps({"error": f"Server exception: {str(e)}"}))
+				except:
+					pass
 
 # ============ Main ==============
 if __name__ == "__main__":
@@ -299,8 +321,12 @@ if __name__ == "__main__":
 	parser.add_argument('--task_name', type=str, required=True)
 	parser.add_argument('--save_dir', type=str, default='./robotwin_log')
 	parser.add_argument('--seed', type=int, default=42)
+	parser.add_argument('--mode', type=str, choices=['abs_joint', 'delta_joint'], default='abs_joint')
 	args = parser.parse_args()
 	print(f"gpu id: {args.gpu_id}")
+	print(f"task name: {args.task_name}")
+	print(f"save dir: {args.save_dir}")
+	print(f"mode: {args.mode}")
 
 	full_address = f"{args.host}:{args.port}"
 	os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
@@ -311,7 +337,7 @@ if __name__ == "__main__":
 	random.seed(args.seed)
 	print(f"[Main] Using Seed: {args.seed}")
 	# ====== 创建真实环境 ======
-	env = RoboTwinEnv(args.task_name, save_dir=args.save_dir)
+	env = RoboTwinEnv(args.task_name, save_dir=args.save_dir, mode=args.mode)
 	obs, instruction = env.reset()
 	print("[Main] Initial Instruction:", instruction)
 
