@@ -32,7 +32,7 @@ class ReplayBuffer(Dataset):
         self.action_space = action_space
         self.capacity = capacity
         self.chunk_length = chunk_length
-        self.magic_shape = (chunk_length, res_action_dim)
+        self.magic_shape = (1, 32)
 
         print("making replay buffer of capacity ", self.capacity)
 

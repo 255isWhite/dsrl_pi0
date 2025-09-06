@@ -37,18 +37,26 @@ def update_critic(
         critic_loss = ((qs - target_q)**2).mean()
         return critic_loss, {
             'critic_loss': critic_loss,
-            'q': qs.mean(),
-            'target_actor_entropy': -next_log_probs.mean(),
-            'next_actions_sampled': next_actions.mean(),
-            'next_log_probs': next_log_probs.mean(),
-            'next_q_pi': next_qs.mean(),
-            'target_q': target_q.mean(),
-            'next_actions_mean': next_actions.mean(),
-            'next_actions_std': next_actions.std(),
-            'next_actions_min': next_actions.min(),
-            'next_actions_max': next_actions.max(),
-            'next_log_probs': next_log_probs.mean(),
-            'q_batch_mean': qs.mean(axis=0),
+            'critic_q': qs.mean(),
+            'critic_target_actor_entropy': -next_log_probs.mean(),
+            'critic_next_actions_sampled': next_actions.mean(),
+            'critic_next_log_probs': next_log_probs.mean(),
+            'critic_next_q_pi': next_qs.mean(),
+            'critic_target_q': target_q.mean(),
+
+            'critic_next_noise_mean': next_actions[...,:-7].mean(),
+            'critic_next_noise_std': next_actions[...,:-7].std(),
+            'critic_next_noise_min': next_actions[...,:-7].min(),
+            'critic_next_noise_max': next_actions[...,:-7].max(),
+            'critic_next_noise_norm': jnp.linalg.norm(next_actions[...,:-7], axis=-1).mean(),
+
+            'critic_next_residual_mean': next_actions[...,-7:].mean(),
+            'critic_next_residual_std': next_actions[...,-7:].std(),
+            'critic_next_residual_min': next_actions[...,-7:].min(),
+            'critic_next_residual_max': next_actions[...,-7:].max(),
+
+            'critic_next_log_probs': next_log_probs.mean(),
+            'critic_q_batch_mean': qs.mean(axis=0),
         }
 
     grads, info = jax.grad(critic_loss_fn, has_aux=True)(critic.params)
@@ -66,6 +74,10 @@ def update_critic_wo_actor(
     
     norm_dist = make_std_gaussian_like(demo_dist)
     next_actions, next_log_probs = norm_dist.sample_and_log_prob(seed=key)
+    next_actions = jnp.concatenate(
+        [next_actions[..., :-7], jnp.zeros_like(next_actions[..., -7:])],
+        axis=-1
+    )
     next_qs = target_critic.apply_fn({'params': target_critic.params},
                                      batch['next_observations'], next_actions)
     if critic_reduction == 'min':
@@ -90,10 +102,18 @@ def update_critic_wo_actor(
             'next_log_probs': next_log_probs.mean(),
             'next_q_pi': next_qs.mean(),
             'target_q': target_q.mean(),
-            'next_actions_mean': next_actions.mean(),
-            'next_actions_std': next_actions.std(),
-            'next_actions_min': next_actions.min(),
-            'next_actions_max': next_actions.max(),
+            
+            'next_noise_mean': next_actions[...,:-7].mean(),
+            'next_noise_std': next_actions[...,:-7].std(),
+            'next_noise_min': next_actions[...,:-7].min(),
+            'next_noise_max': next_actions[...,:-7].max(),
+            'next_noise_norm': jnp.linalg.norm(next_actions[...,:-7], axis=-1).mean(),
+
+            'next_residual_mean': next_actions[...,-7:].mean(),
+            'next_residual_std': next_actions[...,-7:].std(),
+            'next_residual_min': next_actions[...,-7:].min(),
+            'next_residual_max': next_actions[...,-7:].max(),
+
             'next_log_probs': next_log_probs.mean(),
             'q_batch_mean': qs.mean(axis=0),
         }
