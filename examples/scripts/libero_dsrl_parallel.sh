@@ -11,35 +11,12 @@ proj_name="CoupleNR_LIBERO"
 #   "qwarmup=1,seed=43"
 # )
 
-gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
+gpu_list=(4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=full_residual,task_id=0,task_suite=libero_goal"
-  "label=full_residual,task_id=1,task_suite=libero_goal"
-  "label=full_residual,task_id=2,task_suite=libero_goal"
-  "label=full_residual,task_id=3,task_suite=libero_goal"
-  "label=full_residual,task_id=4,task_suite=libero_goal"
-  "label=full_residual,task_id=5,task_suite=libero_goal"
-
-  "label=full_residual,task_id=0,task_suite=libero_object"
-  "label=full_residual,task_id=1,task_suite=libero_object"
-  "label=full_residual,task_id=2,task_suite=libero_object"
-  "label=full_residual,task_id=3,task_suite=libero_object"
-  "label=full_residual,task_id=4,task_suite=libero_object"
-  "label=full_residual,task_id=5,task_suite=libero_object"
-
-  "label=full_residual,task_id=0,task_suite=libero_spatial"
-  "label=full_residual,task_id=1,task_suite=libero_spatial"
-  "label=full_residual,task_id=2,task_suite=libero_spatial"
-  "label=full_residual,task_id=3,task_suite=libero_spatial"
-  "label=full_residual,task_id=4,task_suite=libero_spatial"
-  "label=full_residual,task_id=5,task_suite=libero_spatial"
-
-  "label=full_residual,task_id=0,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=1,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=2,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=3,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=4,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=5,task_suite=libero_10,max_timesteps=500"
+  "label=dsrl,task_id=6,task_suite=libero_10,max_timesteps=500"
+  "label=dsrl,task_id=7,task_suite=libero_10,max_timesteps=500"
+  "label=dsrl,task_id=8,task_suite=libero_10,max_timesteps=500"
+  "label=dsrl,task_id=9,task_suite=libero_10,max_timesteps=500"
 )
 
 
@@ -227,7 +204,7 @@ start_task_on_slot() {
     export XLA_PYTHON_CLIENT_MEM_FRACTION=$mem_fraction
 
     exec python3 examples/launch_train_sim.py \
-      --algorithm pixel_sac_residual_2td \
+      --algorithm pixel_sac \
       --env libero \
       --seed 42 \
       --prefix "${tag}_G${gpu_id}" \
@@ -245,8 +222,8 @@ start_task_on_slot() {
       --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
       --pi0_config pi0_libero40_10-30shot \
       --eval_at_begin 1 \
-      --qwarmup 1 \
-      --kl_coeff 1.0 \
+      --qwarmup 0 \
+      --kl_coeff 0.0 \
       --res_coeff 0.1 \
       --max_timesteps 400 \
       --res_H 100000 \

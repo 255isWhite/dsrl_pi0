@@ -106,9 +106,11 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
         while i <= variant.max_steps:
             if len(online_replay_buffer) <= variant.start_online_updates:
                 res_prob = 0.0
+                use_random = True
             else:
                 res_prob = (i-warmup_steps)/ variant.res_H if i <= (variant.res_H + warmup_steps) else 1.0
-            traj = collect_traj(variant, agent, env, i, agent_dp, res_prob, dp_unnorm_transform)
+                use_random = False
+            traj = collect_traj(variant, agent, env, i, agent_dp, res_prob, dp_unnorm_transform, use_random)
             traj_id = online_replay_buffer._traj_counter
             add_online_data_to_buffer(variant, traj, online_replay_buffer)
             total_env_steps += traj['env_steps']
@@ -131,7 +133,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
             if i == 0 and eval_at_begin:
                 print('performing evaluation for initial checkpoint')
                 if perform_control_evals:
-                    perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform)
+                    perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_random)
                 if hasattr(agent, 'perform_eval'):
                     agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
@@ -187,7 +189,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                         wandb_logger.log({'env_steps': total_env_steps}, step=i)
                         if i % variant.media_log_interval == 0:
                             if perform_control_evals:
-                                perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform)
+                                perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_random)
                             if hasattr(agent, 'perform_eval'):
                                 agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
@@ -233,7 +235,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
         online_replay_buffer.insert(insert_dict)
     online_replay_buffer.increment_traj_counter()
 
-def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None):
+def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_random=False):
     query_frequency = variant.query_freq
     max_timesteps = variant.max_timesteps
     env_max_reward = variant.env_max_reward
@@ -276,7 +278,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             # we then use the noise to sample the action from diffusion model
             rng, key = jax.random.split(rng)
             obs_pi_zero = obs_to_pi_zero_input(obs, variant)
-            if i == 0:
+            if use_random:
                 # for initial round of data collection, we sample from standard gaussian noise
                 noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
                 noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
@@ -368,7 +370,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         'env_steps': t + 1 
     }
 
-def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None):
+def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_random=False):
     query_frequency = variant.query_freq
     print('query frequency', query_frequency)
     max_timesteps = variant.max_timesteps
@@ -414,7 +416,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 obs_pi_zero = obs_to_pi_zero_input(obs, variant)
                 
                 
-                if i == 0:
+                if use_random:
                     # for initial evaluation, we sample from standard gaussian noise to evaluate the base policy's performance
                     noise = jax.random.normal(rng, (1, 50, 32))
                 else:

@@ -13,33 +13,49 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=full_residual,task_id=0,task_suite=libero_goal"
-  "label=full_residual,task_id=1,task_suite=libero_goal"
-  "label=full_residual,task_id=2,task_suite=libero_goal"
-  "label=full_residual,task_id=3,task_suite=libero_goal"
-  "label=full_residual,task_id=4,task_suite=libero_goal"
-  "label=full_residual,task_id=5,task_suite=libero_goal"
+  "label=cnr,task_id=0,kl_coeff=0.1"
+  "label=cnr,task_id=1,kl_coeff=0.1"
+  "label=cnr,task_id=2,kl_coeff=0.1"
+  "label=cnr,task_id=3,kl_coeff=0.1"
+  "label=cnr,task_id=4,kl_coeff=0.1"
+  "label=cnr,task_id=5,kl_coeff=0.1"
+  "label=cnr,task_id=6,kl_coeff=0.1"
+  "label=cnr,task_id=7,kl_coeff=0.1"
+  "label=cnr,task_id=8,kl_coeff=0.1"
+  "label=cnr,task_id=9,kl_coeff=0.1"
 
-  "label=full_residual,task_id=0,task_suite=libero_object"
-  "label=full_residual,task_id=1,task_suite=libero_object"
-  "label=full_residual,task_id=2,task_suite=libero_object"
-  "label=full_residual,task_id=3,task_suite=libero_object"
-  "label=full_residual,task_id=4,task_suite=libero_object"
-  "label=full_residual,task_id=5,task_suite=libero_object"
+  "label=cnr,task_id=0,kl_coeff=1.0"
+  "label=cnr,task_id=1,kl_coeff=1.0"
+  "label=cnr,task_id=2,kl_coeff=1.0"
+  "label=cnr,task_id=3,kl_coeff=1.0"
+  "label=cnr,task_id=4,kl_coeff=1.0"
+  "label=cnr,task_id=5,kl_coeff=1.0"
+  "label=cnr,task_id=6,kl_coeff=1.0"
+  "label=cnr,task_id=7,kl_coeff=1.0"
+  "label=cnr,task_id=8,kl_coeff=1.0"
+  "label=cnr,task_id=9,kl_coeff=1.0"
 
-  "label=full_residual,task_id=0,task_suite=libero_spatial"
-  "label=full_residual,task_id=1,task_suite=libero_spatial"
-  "label=full_residual,task_id=2,task_suite=libero_spatial"
-  "label=full_residual,task_id=3,task_suite=libero_spatial"
-  "label=full_residual,task_id=4,task_suite=libero_spatial"
-  "label=full_residual,task_id=5,task_suite=libero_spatial"
+  "label=cnr,task_id=0,kl_coeff=0.0"
+  "label=cnr,task_id=1,kl_coeff=0.0"
+  "label=cnr,task_id=2,kl_coeff=0.0"
+  "label=cnr,task_id=3,kl_coeff=0.0"
+  "label=cnr,task_id=4,kl_coeff=0.0"
+  "label=cnr,task_id=5,kl_coeff=0.0"
+  "label=cnr,task_id=6,kl_coeff=0.0"
+  "label=cnr,task_id=7,kl_coeff=0.0"
+  "label=cnr,task_id=8,kl_coeff=0.0"
+  "label=cnr,task_id=9,kl_coeff=0.0"
 
-  "label=full_residual,task_id=0,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=1,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=2,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=3,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=4,task_suite=libero_10,max_timesteps=500"
-  "label=full_residual,task_id=5,task_suite=libero_10,max_timesteps=500"
+  "label=cnr,task_id=0,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=1,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=2,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=3,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=4,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=5,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=6,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=7,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=8,kl_coeff=0.0,res_H=20000"
+  "label=cnr,task_id=9,kl_coeff=0.0,res_H=20000"
 )
 
 
@@ -241,15 +257,15 @@ start_task_on_slot() {
       --start_online_updates 500 \
       --query_freq 20 \
       --task_id 21 \
-      --task_suite libero_90 \
+      --task_suite libero_10 \
       --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
       --pi0_config pi0_libero40_10-30shot \
       --eval_at_begin 1 \
       --qwarmup 1 \
       --kl_coeff 1.0 \
       --res_coeff 0.1 \
-      --max_timesteps 400 \
-      --res_H 100000 \
+      --max_timesteps 500 \
+      --res_H 60000 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?

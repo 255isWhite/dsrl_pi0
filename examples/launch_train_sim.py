@@ -3,7 +3,8 @@ import sys
 from examples.train_sim import main
 from jaxrl2.utils.launch_util import parse_training_args
 from general_utils import *
-
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -24,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--suffix', default='', help='suffix to use for wandb')
     parser.add_argument('--multi_grad_step', default=1, help='Number of graident steps to take per environment step, aka UTD', type=int)
     parser.add_argument('--resize_image', default=64, help='the size of image if need resizing', type=int)
-    parser.add_argument('--query_freq', default=-1, help='query frequency', type=int)
+    parser.add_argument('--query_freq', default=20, help='query frequency', type=int)
     parser.add_argument('--task_id', default=57, help='task id for libero environment', type=int)
     parser.add_argument('--task_suite', default='libero_90', help='task suite for libero environment', type=str)
     parser.add_argument('--pi0_model', default='pi0_libero', help='which pi0 model to use', type=str)
