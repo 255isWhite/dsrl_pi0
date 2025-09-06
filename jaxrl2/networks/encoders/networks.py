@@ -56,6 +56,13 @@ class PixelMultiplexer(nn.Module):
             x = nn.tanh(x)
 
         x = observations.copy(add_or_replace={'pixels': x})
+        
+        # print all shapes
+        # for k in x.keys():
+        #     print(f'key: {k}, shape: {x[k].shape}')
+        # # action
+        # print('actions shape: ', actions.shape if actions is not None else None)
+        
 
         # print('fully connected keys', x.keys())
         if actions is None:

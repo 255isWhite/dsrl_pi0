@@ -33,17 +33,26 @@ from jaxrl2.networks.learned_std_normal_policy import LearnedStdTanhNormalPolicy
 from jaxrl2.networks.values import StateActionEnsemble
 from jaxrl2.types import Params, PRNGKey
 from jaxrl2.utils.target_update import soft_target_update
-
+from jaxrl2.networks.deterministic_policy import DeterministicPolicy
+from jaxrl2.agents.common import sample_deterministic_actions_jit
 
 class TrainState(train_state.TrainState):
     batch_stats: Any
 
+def get_batch_stats(actor):
+    if hasattr(actor, 'batch_stats'):
+        return actor.batch_stats
+    else:
+        return None
+    
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
 def _update_jit(
     rng: PRNGKey, actor: TrainState, critic: TrainState,
     target_critic_params: Params, temp: TrainState, batch: TrainState,
     discount: float, tau: float, target_entropy: float,
-    critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int, kl_coeff: float
+    critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int, kl_coeff: float,
+    td3_noise_scale: float,
+    action_magnitude: float
 ) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
     aug_pixels = batch['observations']['pixels']
     aug_next_pixels = batch['next_observations']['pixels']
@@ -79,17 +88,16 @@ def _update_jit(
     
     key, rng = jax.random.split(rng)
     target_critic = critic.replace(params=target_critic_params)
-    new_critic, critic_info = update_critic(key, actor, critic, target_critic, temp, batch, discount, critic_reduction=critic_reduction)
+    new_critic, critic_info = update_critic(key, actor, critic, target_critic, temp, batch, discount, critic_reduction=critic_reduction, td3_noise_scale=td3_noise_scale, action_magnitude=action_magnitude)
     new_target_critic_params = soft_target_update(new_critic.params, target_critic_params, tau)
     
     key, rng = jax.random.split(rng)
     new_actor, actor_info = update_actor(key, actor, new_critic, temp, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
-    new_temp, alpha_info = update_temperature(temp, actor_info['entropy'], target_entropy)
+    new_temp = temp
 
     return rng, new_actor, new_critic, new_target_critic_params, new_temp, {
         **critic_info,
-        **actor_info,
-        **alpha_info
+        **actor_info
     }
     
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
@@ -175,6 +183,7 @@ class PixelSACLearner(Agent):
                  num_cameras: int = 1,
                  kl_coeff: float = 1.0,
                  decay_kl: int = 0,
+                 td3_noise_scale: float = 0.2,
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -192,6 +201,8 @@ class PixelSACLearner(Agent):
         self.critic_reduction = critic_reduction
         self.kl_coeff = kl_coeff
         self.decay_kl = decay_kl
+        self.td3_noise_scale = td3_noise_scale
+        self.action_magnitude = action_magnitude
 
         rng = jax.random.PRNGKey(seed)
         rng, actor_key, critic_key, temp_key = jax.random.split(rng, 4)
@@ -225,7 +236,7 @@ class PixelSACLearner(Agent):
         if len(hidden_dims) == 1:
             hidden_dims = (hidden_dims[0], hidden_dims[0], hidden_dims[0])
         
-        policy_def = LearnedStdTanhNormalPolicy(hidden_dims, self.action_dim, dropout_rate=dropout_rate, low=-action_magnitude, high=action_magnitude)
+        policy_def = DeterministicPolicy(hidden_dims, self.action_dim, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
 
         actor_def = PixelMultiplexer(encoder=encoder_def,
                                      network=policy_def,
@@ -284,7 +295,9 @@ class PixelSACLearner(Agent):
 
     def update(self, batch: FrozenDict) -> Dict[str, float]:
         new_rng, new_actor, new_critic, new_target_critic, new_temp, info = _update_jit(
-            self._rng, self._actor, self._critic, self._target_critic_params, self._temp, batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, self.aug_next, self.num_cameras, self.kl_coeff
+            self._rng, self._actor, self._critic, self._target_critic_params, self._temp, batch, \
+            self.discount, self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, \
+            self.aug_next, self.num_cameras, self.kl_coeff, self.td3_noise_scale, self.action_magnitude
             )
 
         self._rng = new_rng
@@ -341,6 +354,13 @@ class PixelSACLearner(Agent):
             traj_images.append(make_visual(q_pred, rewards, masks, observations['pixels']))
         print('finished reward value visuals.')
         return np.concatenate(traj_images, 0)
+    
+    def sample_deterministic_actions(self, observations: np.ndarray) -> np.ndarray:
+        rng, actions = sample_deterministic_actions_jit(self._rng, self._actor.apply_fn,
+                                          self._actor.params, observations, get_batch_stats(self._actor))
+
+        self._rng = rng
+        return np.asarray(actions)
 
     @property
     def _save_dict(self):

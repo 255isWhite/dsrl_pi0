@@ -12,9 +12,14 @@ def update_critic(
         key: PRNGKey, actor: TrainState, critic: TrainState,
         target_critic: TrainState, temp: TrainState, batch: DatasetDict,
         discount: float, backup_entropy: bool = False,
-        critic_reduction: str = 'min') -> Tuple[TrainState, Dict[str, float]]:
-    dist, means, log_stds = actor.apply_fn({'params': actor.params}, batch['next_observations'])
-    next_actions, next_log_probs = dist.sample_and_log_prob(seed=key)
+        critic_reduction: str = 'min', td3_noise_scale: float = 0.2,
+        action_magnitude: float = 3.0) -> Tuple[TrainState, Dict[str, float]]:
+    next_actions, next_raw_means = actor.apply_fn({'params': actor.params}, batch['next_observations'])
+    key, subkey = jax.random.split(key)
+    td3_noise = jnp.clip(
+        jax.random.normal(subkey, shape=next_actions.shape) * td3_noise_scale, -0.5, 0.5
+    )
+    next_actions = jnp.clip(next_actions + td3_noise, -action_magnitude, action_magnitude)
     next_qs = target_critic.apply_fn({'params': target_critic.params},
                                      batch['next_observations'], next_actions)
     if critic_reduction == 'min':
@@ -26,10 +31,6 @@ def update_critic(
 
     target_q = batch['rewards'] + batch["discount"] * batch['masks'] * next_q
 
-    if backup_entropy:
-        target_q -= batch["discount"] * batch['masks'] * temp.apply_fn(
-            {'params': temp.params}) * next_log_probs
-
     def critic_loss_fn(
             critic_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
         qs = critic.apply_fn({'params': critic_params}, batch['observations'],
@@ -38,16 +39,13 @@ def update_critic(
         return critic_loss, {
             'critic_loss': critic_loss,
             'q': qs.mean(),
-            'target_actor_entropy': -next_log_probs.mean(),
             'next_actions_sampled': next_actions.mean(),
-            'next_log_probs': next_log_probs.mean(),
             'next_q_pi': next_qs.mean(),
             'target_q': target_q.mean(),
             'next_actions_mean': next_actions.mean(),
             'next_actions_std': next_actions.std(),
             'next_actions_min': next_actions.min(),
             'next_actions_max': next_actions.max(),
-            'next_log_probs': next_log_probs.mean(),
             'q_batch_mean': qs.mean(axis=0),
         }
 
@@ -62,12 +60,14 @@ def update_critic_wo_actor(
         target_critic: TrainState, batch: DatasetDict,
         discount: float, backup_entropy: bool = False,
         critic_reduction: str = 'min') -> Tuple[TrainState, Dict[str, float]]:   
-    demo_dist, means, log_stds = actor.apply_fn({'params': actor.params}, batch['next_observations'])
-    
-    norm_dist = make_std_gaussian_like(demo_dist)
-    next_actions, next_log_probs = norm_dist.sample_and_log_prob(seed=key)
+
+    demo_actions, _ = actor.apply_fn({'params': actor.params}, batch['next_observations'])
+
+    # generate a random action from Gaussian(0,1) with the same shape as demo_actions
+    key, subkey = jax.random.split(key)
+    random_actions = jax.random.normal(subkey, shape=demo_actions.shape)
     next_qs = target_critic.apply_fn({'params': target_critic.params},
-                                     batch['next_observations'], next_actions)
+                                     batch['next_observations'], random_actions)
     if critic_reduction == 'min':
         next_q = next_qs.min(axis=0)
     elif critic_reduction == 'mean':
@@ -85,16 +85,8 @@ def update_critic_wo_actor(
         return critic_loss, {
             'critic_loss': critic_loss,
             'q': qs.mean(),
-            'target_actor_entropy': -next_log_probs.mean(),
-            'next_actions_sampled': next_actions.mean(),
-            'next_log_probs': next_log_probs.mean(),
             'next_q_pi': next_qs.mean(),
             'target_q': target_q.mean(),
-            'next_actions_mean': next_actions.mean(),
-            'next_actions_std': next_actions.std(),
-            'next_actions_min': next_actions.min(),
-            'next_actions_max': next_actions.max(),
-            'next_log_probs': next_log_probs.mean(),
             'q_batch_mean': qs.mean(axis=0),
         }
 

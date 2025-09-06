@@ -168,7 +168,7 @@ def main(variant):
 
     if variant.algorithm == 'pixel_sac':
         print("Using pixel sac learner")
-        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl ,**kwargs)
+        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl , td3_noise_scale=variant.td3_noise_scale, **kwargs)
     elif variant.algorithm == 'pixel_sac_residual':
         print("Using residual learner")
         agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)
