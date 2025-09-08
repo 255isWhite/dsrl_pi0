@@ -295,9 +295,17 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
 
             assert agent_dp is not None
             # we then use the noise to sample the action from diffusion model
-            rng, key = jax.random.split(rng)
             obs_pi_zero = obs_to_pi_zero_input(obs, variant)
-            if use_random:
+            
+            rng, key = jax.random.split(rng)
+            rand_val = jax.random.uniform(key, ())
+            
+            if rand_val < res_prob and use_res:
+                use_residual = True
+            else:
+                use_residual = False
+                
+            if use_random or use_residual==False:
                 # for initial round of data collection, we sample from standard gaussian noise
                 noise = jax.random.normal(key, (1, 50, 32))
                 extra_all_zero = jax.numpy.zeros((1, 50, 7))
@@ -322,9 +330,8 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             # actions = action_dict["actions"]
             
             # b.
-            rng, key = jax.random.split(rng)
-            rand_val = jax.random.uniform(key, ())
-            if rand_val < res_prob and use_res:
+
+            if use_residual:
                 actions = action_dict["norm_actions"][:query_frequency]+ res_coeff * actions_residual
                 actual_norm_action = actions.copy()
                 actions = dp_unnorm_transform({'actions': actions})['actions']

@@ -96,6 +96,7 @@ def main(variant):
     else:
         variant.use_res = 0
     variant.media_log_interval = variant.media_log_fold * variant.log_interval
+    variant.multi_grad_step = variant.query_freq
     # we shard the leading dimension (batch dimension) accross all devices evenly
     sharding = jax.sharding.PositionalSharding(devices)
     shard_fn = partial(shard_batch, sharding=sharding)
