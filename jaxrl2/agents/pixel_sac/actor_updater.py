@@ -53,7 +53,7 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         
         # c. KL Gaussian
         tar_norm = 32
-        ac_norm = jnp.linalg.norm(actions[...,:-7], axis=-1)  # [batch]
+        ac_norm = jnp.linalg.norm(actions[...,:32], axis=-1)  # [batch]
         kl_loss = jnp.mean(0.5 * ac_norm**2 - (tar_norm - 1) * jnp.log(ac_norm + 1e-8))
 
         actor_loss = actor_loss + kl_loss * kl_coeff
@@ -82,18 +82,18 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             'actor_ac_norm_std': ac_norm.std(),
             'actor_tar_norm': jnp.sqrt(tar_norm-1),
 
-            'actor_noise_mean_pi_avg': mean_dist[..., :-7].mean(),
-            'actor_noise_mean_std_avg': std_diag_dist[..., :-7].mean(),
+            'actor_noise_mean_pi_avg': mean_dist[..., :32].mean(),
+            'actor_noise_mean_std_avg': std_diag_dist[..., :32].mean(),
 
-            'actor_noise_mean': actions[...,:-7].mean(),
-            'actor_noise_std': actions[...,:-7].std(),
-            'actor_noise_min': actions[...,:-7].min(),
-            'actor_noise_max': actions[...,:-7].max(),
+            'actor_noise_mean': actions[...,:32].mean(),
+            'actor_noise_std': actions[...,:32].std(),
+            'actor_noise_min': actions[...,:32].min(),
+            'actor_noise_max': actions[...,:32].max(),
 
-            'actor_residual_mean': actions[...,-7:].mean(),
-            'actor_residual_std': actions[...,-7:].std(),
-            'actor_residual_min': actions[...,-7:].min(),
-            'actor_residual_max': actions[...,-7:].max(),
+            'actor_residual_mean': actions[...,32:].mean(),
+            'actor_residual_std': actions[...,32:].std(),
+            'actor_residual_min': actions[...,32:].min(),
+            'actor_residual_max': actions[...,32:].max(),
 
         }
         return actor_loss, (things_to_log, new_model_state)

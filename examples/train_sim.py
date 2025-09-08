@@ -77,7 +77,7 @@ class DummyEnv(gym.ObservationWrapper):
             obs_dict['state'] = Box(low=-1.0, high=1.0, shape=(state_dim, 1), dtype=np.float32)
         self.observation_space = Dict(obs_dict)
         if variant.extra_noise:
-            self.action_space = Box(low=-1, high=1, shape=(1, 32 + 7,), dtype=np.float32)
+            self.action_space = Box(low=-1, high=1, shape=(1, 32 + 7*20,), dtype=np.float32)
         else:
             self.action_space = Box(low=-1, high=1, shape=(1, 32,), dtype=np.float32) # 32 is the noise action space of pi 0
 
@@ -91,10 +91,10 @@ def main(variant):
     print('task_id', variant.task_id)
     print('task_suite', variant.task_suite)
     print('algorithm', variant.algorithm)
-    if 'residual' in variant.algorithm:
-        variant.use_res = 1
-    else:
-        variant.use_res = 0
+    # if 'residual' in variant.algorithm:
+    #     variant.use_res = 1
+    # else:
+    #     variant.use_res = 0
     variant.media_log_interval = variant.media_log_fold * variant.log_interval
     variant.multi_grad_step = variant.query_freq
     # we shard the leading dimension (batch dimension) accross all devices evenly
@@ -173,7 +173,7 @@ def main(variant):
 
     if variant.algorithm == 'pixel_sac':
         print("Using pixel sac learner")
-        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl ,**kwargs)
+        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, full_action_dim=172, full_hidden_dim=variant.full_hidden_dim, **kwargs)
     elif variant.algorithm == 'pixel_sac_residual':
         print("Using residual learner")
         agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)

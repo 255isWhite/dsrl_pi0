@@ -44,16 +44,16 @@ def update_critic(
             'critic_next_q_pi': next_qs.mean(),
             'critic_target_q': target_q.mean(),
 
-            'critic_next_noise_mean': next_actions[...,:-7].mean(),
-            'critic_next_noise_std': next_actions[...,:-7].std(),
-            'critic_next_noise_min': next_actions[...,:-7].min(),
-            'critic_next_noise_max': next_actions[...,:-7].max(),
-            'critic_next_noise_norm': jnp.linalg.norm(next_actions[...,:-7], axis=-1).mean(),
+            'critic_next_noise_mean': next_actions[...,:32].mean(),
+            'critic_next_noise_std': next_actions[...,:32].std(),
+            'critic_next_noise_min': next_actions[...,:32].min(),
+            'critic_next_noise_max': next_actions[...,:32].max(),
+            'critic_next_noise_norm': jnp.linalg.norm(next_actions[...,:32], axis=-1).mean(),
 
-            'critic_next_residual_mean': next_actions[...,-7:].mean(),
-            'critic_next_residual_std': next_actions[...,-7:].std(),
-            'critic_next_residual_min': next_actions[...,-7:].min(),
-            'critic_next_residual_max': next_actions[...,-7:].max(),
+            'critic_next_residual_mean': next_actions[...,32:].mean(),
+            'critic_next_residual_std': next_actions[...,32:].std(),
+            'critic_next_residual_min': next_actions[...,32:].min(),
+            'critic_next_residual_max': next_actions[...,32:].max(),
 
             'critic_next_log_probs': next_log_probs.mean(),
             'critic_q_batch_mean': qs.mean(axis=0),
@@ -75,7 +75,7 @@ def update_critic_wo_actor(
     norm_dist = make_std_gaussian_like(demo_dist)
     next_actions, next_log_probs = norm_dist.sample_and_log_prob(seed=key)
     next_actions = jnp.concatenate(
-        [next_actions[..., :-7], jnp.zeros_like(next_actions[..., -7:])],
+        [next_actions[..., :32], jnp.zeros_like(next_actions[..., 32:])],
         axis=-1
     )
     next_qs = target_critic.apply_fn({'params': target_critic.params},
@@ -103,16 +103,16 @@ def update_critic_wo_actor(
             'next_q_pi': next_qs.mean(),
             'target_q': target_q.mean(),
             
-            'next_noise_mean': next_actions[...,:-7].mean(),
-            'next_noise_std': next_actions[...,:-7].std(),
-            'next_noise_min': next_actions[...,:-7].min(),
-            'next_noise_max': next_actions[...,:-7].max(),
-            'next_noise_norm': jnp.linalg.norm(next_actions[...,:-7], axis=-1).mean(),
+            'next_noise_mean': next_actions[...,:32].mean(),
+            'next_noise_std': next_actions[...,:32].std(),
+            'next_noise_min': next_actions[...,:32].min(),
+            'next_noise_max': next_actions[...,:32].max(),
+            'next_noise_norm': jnp.linalg.norm(next_actions[...,:32], axis=-1).mean(),
 
-            'next_residual_mean': next_actions[...,-7:].mean(),
-            'next_residual_std': next_actions[...,-7:].std(),
-            'next_residual_min': next_actions[...,-7:].min(),
-            'next_residual_max': next_actions[...,-7:].max(),
+            'next_residual_mean': next_actions[...,32:].mean(),
+            'next_residual_std': next_actions[...,32:].std(),
+            'next_residual_min': next_actions[...,32:].min(),
+            'next_residual_max': next_actions[...,32:].max(),
 
             'next_log_probs': next_log_probs.mean(),
             'q_batch_mean': qs.mean(axis=0),

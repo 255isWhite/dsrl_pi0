@@ -13,25 +13,25 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=oneQ_fix,res_H=20000,res_coeff=0.1"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.1"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.1"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.1"
+  "label=oneQ_full,res_H=20000,res_coeff=0.1"
+  "label=oneQ_full,res_H=50000,res_coeff=0.1"
+  "label=oneQ_full,res_H=100000,res_coeff=0.1"
+  "label=oneQ_full,res_H=200000,res_coeff=0.1"
 
-  "label=oneQ_fix,res_H=20000,res_coeff=0.2"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.2"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.2"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.2"
+  "label=oneQ_full,res_H=20000,res_coeff=0.2"
+  "label=oneQ_full,res_H=50000,res_coeff=0.2"
+  "label=oneQ_full,res_H=100000,res_coeff=0.2"
+  "label=oneQ_full,res_H=200000,res_coeff=0.2"
 
-  "label=oneQ_fix,res_H=20000,res_coeff=0.01"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.01"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.01"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.01"
+  "label=oneQ_full,res_H=20000,res_coeff=0.01"
+  "label=oneQ_full,res_H=50000,res_coeff=0.01"
+  "label=oneQ_full,res_H=100000,res_coeff=0.01"
+  "label=oneQ_full,res_H=200000,res_coeff=0.01"
 
-  "label=oneQ_fix,res_H=20000,res_coeff=0.03"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.03"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.03"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.03"
+  "label=oneQ_full,res_H=20000,res_coeff=0.03"
+  "label=oneQ_full,res_H=50000,res_coeff=0.03"
+  "label=oneQ_full,res_H=100000,res_coeff=0.03"
+  "label=oneQ_full,res_H=200000,res_coeff=0.03"
 )
 
 
@@ -232,7 +232,7 @@ start_task_on_slot() {
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --query_freq 20 \
-      --task_id 1 \
+      --task_id 9 \
       --task_suite libero_10 \
       --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
       --pi0_config pi0_libero40_10-30shot \

@@ -20,7 +20,7 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
@@ -175,6 +175,8 @@ class PixelSACLearner(Agent):
                  num_cameras: int = 1,
                  kl_coeff: float = 1.0,
                  decay_kl: int = 0,
+                 full_action_dim: int = 172,
+                 full_hidden_dim: int = 256
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -192,6 +194,9 @@ class PixelSACLearner(Agent):
         self.critic_reduction = critic_reduction
         self.kl_coeff = kl_coeff
         self.decay_kl = decay_kl
+        
+        self.full_action_dim = full_action_dim
+        self.full_hidden_dim = full_hidden_dim
 
         rng = jax.random.PRNGKey(seed)
         rng, actor_key, critic_key, temp_key = jax.random.split(rng, 4)
@@ -225,11 +230,11 @@ class PixelSACLearner(Agent):
         if len(hidden_dims) == 1:
             hidden_dims = (hidden_dims[0], hidden_dims[0], hidden_dims[0])
         
-        policy_def = LearnedStdTanhNormalPolicy(hidden_dims, self.action_dim, dropout_rate=dropout_rate, low=-action_magnitude, high=action_magnitude)
+        policy_def = LearnedStdTanhNormalPolicy(hidden_dims, self.full_action_dim, dropout_rate=dropout_rate, low=-action_magnitude, high=action_magnitude)
 
-        actor_def = PixelMultiplexer(encoder=encoder_def,
+        actor_def = LargePixelMultiplexer(encoder=encoder_def,
                                      network=policy_def,
-                                     latent_dim=latent_dim,
+                                     latent_dim=self.full_hidden_dim,
                                      use_bottleneck=use_bottleneck
                                      )
         print(actor_def)
@@ -243,13 +248,14 @@ class PixelSACLearner(Agent):
                                   batch_stats=actor_batch_stats)
 
         critic_def = StateActionEnsemble(hidden_dims, num_qs=num_qs)
-        critic_def = PixelMultiplexer(encoder=encoder_def,
+        critic_def = LargePixelMultiplexer(encoder=encoder_def,
                                       network=critic_def,
-                                      latent_dim=latent_dim,
+                                      latent_dim=self.full_hidden_dim,
                                       use_bottleneck=use_bottleneck
                                       )
         print(critic_def)
-        critic_def_init = critic_def.init(critic_key, observations, actions)
+        magic_actions = np.zeros((observations['pixels'].shape[0], self.full_action_dim))
+        critic_def_init = critic_def.init(critic_key, observations, magic_actions)
         self._critic_init_params = critic_def_init['params']
 
         critic_params = critic_def_init['params']

@@ -79,7 +79,7 @@ class LargePixelMultiplexer(nn.Module):
 
         x = self.encoder(observations['pixels'], training)
         if self.use_bottleneck:
-            x = nn.Dense(self.latent_dim * 1, kernel_init=xavier_init())(x)
+            x = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(x)
             x = nn.LayerNorm()(x)
             x = nn.tanh(x)
         x = observations.copy(add_or_replace={'pixels': x})

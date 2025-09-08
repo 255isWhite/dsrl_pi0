@@ -105,7 +105,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
     with tqdm(total=variant.max_steps, initial=0) as pbar:
         while i <= variant.max_steps:
             if len(online_replay_buffer) <= variant.start_online_updates:
-                res_prob = 0.0
+                res_prob = -1.0
                 use_random = True
             else:
                 res_prob = (i-warmup_steps)/ variant.res_H if i <= (variant.res_H + warmup_steps) else 1.0
@@ -147,7 +147,8 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                     if len(online_replay_buffer) <= variant.start_online_updates:
                         if variant.qwarmup:
                             if variant.use_res:
-                                update_info, res_update_info = agent.update_wo_actor(batch, res_prob)
+                                update_info = agent.update_wo_actor(batch)
+                                res_update_info = {}
                             else:
                                 update_info = agent.update_wo_actor(batch)
                                 res_update_info = {}
@@ -156,7 +157,8 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                             res_update_info = {}
                     else:
                         if variant.use_res:
-                            update_info, res_update_info = agent.update(batch, res_prob)
+                            update_info = agent.update(batch)
+                            res_update_info = {}
                         else:
                             update_info = agent.update(batch)
                             res_update_info = {}                                            
@@ -300,24 +302,31 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             rng, key = jax.random.split(rng)
             rand_val = jax.random.uniform(key, ())
             
-            if rand_val < res_prob and use_res:
-                use_residual = True
-            else:
+            if use_random:
                 use_residual = False
+            else:
+                if rand_val < res_prob and use_res:
+                    use_residual = True
+                else:
+                    use_residual = False
                 
-            if use_random or use_residual==False:
+            print(f"i is {i}, res_prob is {res_prob}, use_residual is {use_residual}, use_random is {use_random}")
+            if not use_residual:
                 # for initial round of data collection, we sample from standard gaussian noise
                 noise = jax.random.normal(key, (1, 50, 32))
                 extra_all_zero = jax.numpy.zeros((1, 50, 7))
                 raw_actions = jax.numpy.concatenate([noise, extra_all_zero], axis=-1)[:,0,:]
+                # pad another 19 zeros to raw_actions last dim
+                raw_actions = jax.numpy.pad(raw_actions, ((0, 0), (0, 133)), mode='constant')
                 noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
                 noise = jax.numpy.concatenate([noise, noise_repeat], axis=1)
                 actions_noise = noise[0, :agent.action_chunk_shape[0], :]
             else:
                 # sac agent predicts the noise for diffusion model
                 raw_actions = agent.sample_actions(obs_dict)
-                actions_noise = raw_actions[..., :-7]
-                actions_residual = raw_actions[..., -7:]
+                actions_noise = raw_actions[..., :32]
+                actions_residual = raw_actions[..., 32:]
+                actions_residual = np.reshape(actions_residual, (20,7))
                 actions_noise = np.reshape(actions_noise, (1,32))
                 noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
                 noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
@@ -439,37 +448,58 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                     obs_dict = {
                         'pixels': curr_image[np.newaxis, ..., np.newaxis],
                     }
-
-                rng, key = jax.random.split(rng)
                 assert agent_dp is not None
                 
                 obs_pi_zero = obs_to_pi_zero_input(obs, variant)
                 
+                rng, key = jax.random.split(rng)
+                rand_val = jax.random.uniform(key, ())
                 
                 if use_random:
-                    # for initial evaluation, we sample from standard gaussian noise to evaluate the base policy's performance
-                    noise = jax.random.normal(rng, (1, 50, 32))
+                    use_residual = False
                 else:
+                    if rand_val < res_prob and use_res:
+                        use_residual = True
+                    else:
+                        use_residual = False
+                    
+                print(f"i is {i}, res_prob is {res_prob}, use_residual is {use_residual}, use_random is {use_random}")
+                if not use_residual:
+                    # for initial round of data collection, we sample from standard gaussian noise
+                    noise = jax.random.normal(key, (1, 50, 32))
+                    extra_all_zero = jax.numpy.zeros((1, 50, 7))
+                    raw_actions = jax.numpy.concatenate([noise, extra_all_zero], axis=-1)[:,0,:]
+                    # pad another 19 zeros to raw_actions last dim
+                    raw_actions = jax.numpy.pad(raw_actions, ((0, 0), (0, 133)), mode='constant')
+                    noise_repeat = jax.numpy.repeat(noise[:, -1:, :], 50 - noise.shape[1], axis=1)
+                    noise = jax.numpy.concatenate([noise, noise_repeat], axis=1)
+                    actions_noise = noise[0, :agent.action_chunk_shape[0], :]
+                else:
+                    # sac agent predicts the noise for diffusion model
                     raw_actions = agent.sample_actions(obs_dict)
-                    actions_noise = raw_actions[..., :-7]
-                    actions_residual = raw_actions[..., -7:]
+                    actions_noise = raw_actions[..., :32]
+                    actions_residual = raw_actions[..., 32:]
+                    actions_residual = np.reshape(actions_residual, (20,7))
                     actions_noise = np.reshape(actions_noise, (1,32))
                     noise = np.repeat(actions_noise[-1:, :], 50 - actions_noise.shape[0], axis=0)
                     noise = jax.numpy.concatenate([actions_noise, noise], axis=0)[None]
-                    
-                action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
 
+                action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
+                
+                # model_noise = agent_dp.reverse_infer(obs_pi_zero, action=model_actions)["noise"]
+                
                 # # a.
                 # actions = action_dict["actions"]
                 
                 # b.
-                rng, key = jax.random.split(rng)
-                rand_val = jax.random.uniform(key, ())
-                if rand_val < res_prob and use_res:
+
+                if use_residual:
                     actions = action_dict["norm_actions"][:query_frequency]+ res_coeff * actions_residual
+                    actual_norm_action = actions.copy()
                     actions = dp_unnorm_transform({'actions': actions})['actions']
                 else:
-                    actions = action_dict["actions"]
+                    actions = action_dict["actions"][:query_frequency]
+                    actual_norm_action = action_dict["norm_actions"][:query_frequency]
                     
             action_t = actions[t % query_frequency]
             
