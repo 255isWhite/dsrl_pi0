@@ -13,25 +13,45 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=oneQ_fix,res_H=20000,res_coeff=0.1"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.1"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.1"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.1"
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.1"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.1"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.1"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.1"
 
-  "label=oneQ_fix,res_H=20000,res_coeff=0.2"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.2"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.2"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.2"
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.2"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.2"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.2"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.2"
 
-  "label=oneQ_fix,res_H=20000,res_coeff=0.01"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.01"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.01"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.01"
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.01"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.01"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.01"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.01"
 
-  "label=oneQ_fix,res_H=20000,res_coeff=0.03"
-  "label=oneQ_fix,res_H=50000,res_coeff=0.03"
-  "label=oneQ_fix,res_H=100000,res_coeff=0.03"
-  "label=oneQ_fix,res_H=200000,res_coeff=0.03"
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.03"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.03"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.03"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.03"
+
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.1,task_id=9"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.1,task_id=9"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.1,task_id=9"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.1,task_id=9"
+
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.2,task_id=9"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.2,task_id=9"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.2,task_id=9"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.2,task_id=9"
+
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.01,task_id=9"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.01,task_id=9"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.01,task_id=9"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.01,task_id=9"
+
+  "label=oneQ_fix2,res_H=20000,res_coeff=0.03,task_id=9"
+  "label=oneQ_fix2,res_H=50000,res_coeff=0.03,task_id=9"
+  "label=oneQ_fix2,res_H=100000,res_coeff=0.03,task_id=9"
+  "label=oneQ_fix2,res_H=200000,res_coeff=0.03,task_id=9"
 )
 
 
@@ -243,6 +263,7 @@ start_task_on_slot() {
       --max_timesteps 500 \
       --res_H 100000 \
       --extra_noise 1 \
+      --use_res 1 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?

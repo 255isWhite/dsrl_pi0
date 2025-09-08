@@ -91,10 +91,10 @@ def main(variant):
     print('task_id', variant.task_id)
     print('task_suite', variant.task_suite)
     print('algorithm', variant.algorithm)
-    if 'residual' in variant.algorithm:
-        variant.use_res = 1
-    else:
-        variant.use_res = 0
+    # if 'residual' in variant.algorithm:
+    #     variant.use_res = 1
+    # else:
+    #     variant.use_res = 0
     variant.media_log_interval = variant.media_log_fold * variant.log_interval
     variant.multi_grad_step = variant.query_freq
     # we shard the leading dimension (batch dimension) accross all devices evenly
