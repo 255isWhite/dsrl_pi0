@@ -248,12 +248,10 @@ class PixelSACLearner(Agent):
                                   batch_stats=actor_batch_stats)
 
         critic_def = StateActionEnsemble(hidden_dims, num_qs=num_qs)
-        action_chunk_def = ActionChunkEncoder(out_dim=self.q_hidden_dim)
-        critic_def = ChunkPixelMultiplexer(encoder=encoder_def,
+        critic_def = PixelMultiplexer(encoder=encoder_def,
                                       network=critic_def,
-                                      latent_dim=self.q_hidden_dim,
-                                      use_bottleneck=use_bottleneck,
-                                      chunk_encoder=action_chunk_def,
+                                      latent_dim=latent_dim,
+                                      use_bottleneck=use_bottleneck
                                       )
         print(critic_def)
         critic_def_init = critic_def.init(critic_key, observations, actions)

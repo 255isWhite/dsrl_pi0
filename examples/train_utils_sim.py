@@ -281,24 +281,33 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             rng, key = jax.random.split(rng)
             rand_val = jax.random.uniform(key, ())
             
-            if use_random:
-                use_residual = False
-            else:
-                if rand_val < res_prob and use_res:
-                    use_residual = True
-                else:
-                    use_residual = False
+            # if use_random:
+            #     use_residual = False
+            # else:
+            #     if rand_val < res_prob and use_res:
+            #         use_residual = True
+            #     else:
+            #         use_residual = False
                 
-            if not use_residual:
+            if use_random:
                 # for initial round of data collection, we sample from standard gaussian noise
-                noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
-
-                actions_noise = noise[0] # squeeze batch dim
+                actions_noise = jax.random.normal(key, agent.action_chunk_shape)
+                actions_noise_interp = jax.image.resize(
+                    actions_noise, 
+                    shape=(50, 32), 
+                    method="linear"   # 支持 "linear", "nearest", "cubic"
+                )
+                noise = actions_noise_interp[None]
             else:
                 # sac agent predicts the noise for diffusion model
                 actions_noise = agent.sample_actions(obs_dict)
                 actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
-                noise = actions_noise[None] # add batch dim
+                actions_noise_interp = jax.image.resize(
+                    actions_noise, 
+                    shape=(50, 32), 
+                    method="linear"   # 支持 "linear", "nearest", "cubic"
+                )
+                noise = actions_noise_interp[None] # add batch dim
 
             action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
             
@@ -415,20 +424,26 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 rng, key = jax.random.split(rng)
                 rand_val = jax.random.uniform(key, ())
                 
+                # if use_random:
+                #     use_residual = False
+                # else:
+                #     if rand_val < res_prob and use_res:
+                #         use_residual = True
+                #     else:
+                #         use_residual = False
+                
                 if use_random:
-                    use_residual = False
-                else:
-                    if rand_val < res_prob and use_res:
-                        use_residual = True
-                    else:
-                        use_residual = False
-                if not use_residual:
                     # for initial evaluation, we sample from standard gaussian noise to evaluate the base policy's performance
                     noise = jax.random.normal(rng, (1, 50, 32))
                 else:
                     actions_noise = agent.sample_actions(obs_dict)
                     actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
-                    noise = actions_noise[None]
+                    actions_noise_interp = jax.image.resize(
+                        actions_noise, 
+                        shape=(50, 32), 
+                        method="linear"   # 支持 "linear", "nearest", "cubic"
+                    )
+                    noise = actions_noise_interp[None] # add batch dim
                     
                 action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
 
