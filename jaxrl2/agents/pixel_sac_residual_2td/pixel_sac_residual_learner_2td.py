@@ -86,7 +86,7 @@ def _update_jit(
     
     key, rng = jax.random.split(rng)
     target_critic = critic.replace(params=target_critic_params)
-    new_critic, critic_info = update_critic(key, actor, critic, target_critic, temp, batch, discount, critic_reduction=critic_reduction)
+    new_critic, critic_info = update_critic(key, actor, critic, target_critic, clean_critic, res_actor, temp, batch, discount, critic_reduction=critic_reduction)
     new_target_critic_params = soft_target_update(new_critic.params, target_critic_params, tau)
     
     key, rng = jax.random.split(rng)
@@ -96,13 +96,13 @@ def _update_jit(
     key, rng = jax.random.split(rng)
     clean_target_critic = clean_critic.replace(params=clean_target_critic_params)
     new_clean_critic, clean_critic_info = update_clean_critic(
-        key, clean_critic, clean_target_critic, res_actor, batch, discount, res_coeff, res_prob, critic_reduction=critic_reduction
+        key, clean_critic, clean_target_critic, res_actor, new_actor, batch, discount, res_coeff, res_prob, critic_reduction=critic_reduction
     )
     new_clean_target_critic_params = soft_target_update(new_clean_critic.params, clean_target_critic_params, tau)
     
     key, rng = jax.random.split(rng)
     new_res_actor, res_actor_info = update_res_actor(
-        key, res_actor, new_clean_critic, batch, critic_reduction=critic_reduction, res_coeff=res_coeff
+        key, res_actor, new_actor, new_clean_critic, batch, critic_reduction=critic_reduction, res_coeff=res_coeff
     )
 
     return rng, new_actor, new_critic, new_target_critic_params, new_res_actor, new_clean_critic, new_clean_target_critic_params, new_temp, {
@@ -353,7 +353,7 @@ class PixelSACResidualLearner2TD(Agent):
                                       )
         print(clean_critic_def)
         magic_actions = np.zeros((observations['pixels'].shape[0], self.res_action_dim))
-        clean_critic_def_init = clean_critic_def.init(clean_critic_key, observations, magic_actions)
+        clean_critic_def_init = clean_critic_def.init(clean_critic_key, observations, magic_actions, actions)
         self._critic_init_params = clean_critic_def_init['params']
 
         clean_critic_params = clean_critic_def_init['params']
@@ -369,14 +369,15 @@ class PixelSACResidualLearner2TD(Agent):
         self._clean_critic = clean_critic
         self._clean_target_critic_params = clean_target_critic_params
         
+        # count parameters with M
         print(f"Counting parameters...\n"
-              f"actor: {count_parameters(actor_params)}\n"
-              f"critic: {count_parameters(critic_params)}\n"
-              f"res_actor: {count_parameters(res_actor_params)}\n"
-              f"clean_critic: {count_parameters(clean_critic_params)}\n"
+                f"actor: {count_parameters(actor_params)/1e6:.2f}M\n"
+                f"critic: {count_parameters(critic_params)/1e6:.2f}M\n"
+                f"res_actor: {count_parameters(res_actor_params)/1e6:.2f}M\n"
+                f"clean_critic: {count_parameters(clean_critic_params)/1e6:.2f}M"
               )
-        
-        
+
+
 
     def update(self, batch: FrozenDict, res_prob: float) -> Dict[str, float]:
         if self.decay_kl:

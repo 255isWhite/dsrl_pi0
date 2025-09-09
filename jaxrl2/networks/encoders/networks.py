@@ -74,12 +74,21 @@ class LargePixelMultiplexer(nn.Module):
     def __call__(self,
                  observations: Union[FrozenDict, Dict],
                  actions: Optional[jnp.ndarray] = None,
+                 noise: Optional[jnp.ndarray] = None,
                  training: bool = False):
         observations = FrozenDict(observations)
+        
+        # # print _shape
+        # for k, v in observations.items():
+        #     print (k, v.shape)
+        # if actions is not None:
+        #     print ('action shape: ', actions.shape)
+        # if noise is not None:
+        #     print ('noise shape: ', noise.shape)
 
         x = self.encoder(observations['pixels'], training)
         if self.use_bottleneck:
-            x = nn.Dense(self.latent_dim * 1, kernel_init=xavier_init())(x)
+            x = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(x)
             x = nn.LayerNorm()(x)
             x = nn.tanh(x)
         x = observations.copy(add_or_replace={'pixels': x})
@@ -89,6 +98,12 @@ class LargePixelMultiplexer(nn.Module):
         y = nn.LayerNorm()(y)
         y = nn.tanh(y)
         x = x.copy(add_or_replace={'state': y})
+        
+        if noise is not None:
+            noise = nn.Dense(self.latent_dim, kernel_init=xavier_init())(noise)
+            noise = nn.LayerNorm()(noise)
+            noise = nn.tanh(noise)
+            x = x.copy(add_or_replace={'noise': noise})
         
         if actions is not None:
             actions = nn.Dense(self.latent_dim, kernel_init=xavier_init())(actions)

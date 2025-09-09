@@ -32,10 +32,11 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --hidden_dims 128 \
 --task_id 57 \
 --task_suite libero_90 \
---pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/libero130_1shot/20000 \
+--pi0_model /mnt/ssd1/data/zh1/pi0/checkpoints/pi0_libero130_1shot/libero130_1shot/20000 \
 --pi0_config pi0_libero130_1shot \
---eval_at_begin 1 \
+--eval_at_begin 0 \
 --kl_coeff 1.0 \
---qwarmup 1 \
+--qwarmup 0 \
 --max_timesteps 40 \
 --use_res 1 \
+--res_H 40 \

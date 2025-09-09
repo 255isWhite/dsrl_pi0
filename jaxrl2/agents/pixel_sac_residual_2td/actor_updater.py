@@ -18,13 +18,8 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
             actor_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
         if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
             dist, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['observations'], mutable=['batch_stats'])
-            if cross_norm:
-                next_dist, means, log_stds, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['next_observations'], mutable=['batch_stats'])
-            else:
-                next_dist, means, log_stds = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['next_observations'])
         else:
             dist, means, log_stds = actor.apply_fn({'params': actor_params}, batch['observations'])
-            next_dist, means, log_stds = actor.apply_fn({'params': actor_params}, batch['next_observations'])
             new_model_state = {}
         
         # For logging only
@@ -99,9 +94,10 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
 
     return new_actor, info
 
-def update_res_actor(key: PRNGKey, res_actor: TrainState, clean_critic: TrainState, 
+def update_res_actor(key: PRNGKey, res_actor: TrainState, actor: TrainState, clean_critic: TrainState, 
                 batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', res_coeff:float=0.1, dp_unnorm_transform=None) -> Tuple[TrainState, Dict[str, float]]:
-
+    key, key_act = jax.random.split(key, num=2)
+    
     def res_actor_loss_fn(
             res_actor_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
         if hasattr(res_actor, 'batch_stats') and res_actor.batch_stats is not None:
@@ -110,14 +106,17 @@ def update_res_actor(key: PRNGKey, res_actor: TrainState, clean_critic: TrainSta
             res_actions, raw_means = res_actor.apply_fn({'params': res_actor_params}, batch['observations'])
             new_model_state = {}
 
-        actions = batch['norm_actions'].reshape(res_actions.shape[0],-1) + res_actions * res_coeff
+        # actions = batch['norm_actions'].reshape(res_actions.shape[0],-1) + res_actions * res_coeff
+        dist, means, log_stds = actor.apply_fn({'params': actor.params}, batch['observations'])
+        noise, log_probs = dist.sample_and_log_prob(seed=key_act)
+        
         # actions = dp_unnorm_transform({'actions': actions})['actions']
 
         if hasattr(clean_critic, 'batch_stats') and clean_critic.batch_stats is not None:
             qs, _ = clean_critic.apply_fn({'params': clean_critic.params, 'batch_stats': clean_critic.batch_stats}, batch['observations'],
-                            actions, mutable=['batch_stats'])
+                            res_actions, noise, mutable=['batch_stats'])
         else:    
-            qs = clean_critic.apply_fn({'params': clean_critic.params}, batch['observations'], actions)
+            qs = clean_critic.apply_fn({'params': clean_critic.params}, batch['observations'], res_actions, noise)
         
         if critic_reduction == 'min':
             q = qs.min(axis=0)

@@ -18,7 +18,7 @@ def _flatten_dict(x: Union[FrozenDict, jnp.ndarray]):
             if k == 'state': # flatten action chunk to 1D
                 obs.append(jnp.reshape(v, [*v.shape[:-2], np.prod(v.shape[-2:])]))
                 # v = jnp.reshape(v, [*v.shape[:-2], np.prod(v.shape[-2:])])
-            elif k == 'prev_action' or k == 'actions':
+            elif k == 'prev_action' or k == 'actions' or k == 'noise':
                 if v.ndim > 2:
                     # deal with action chunk
                     obs.append(jnp.reshape(v, [*v.shape[:-2], np.prod(v.shape[-2:])]))
