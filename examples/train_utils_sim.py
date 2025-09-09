@@ -281,15 +281,15 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             rng, key = jax.random.split(rng)
             rand_val = jax.random.uniform(key, ())
             
-            if use_random:
-                use_residual = False
-            else:
-                if rand_val < res_prob and use_res:
-                    use_residual = True
-                else:
-                    use_residual = False
+            # if use_random:
+            #     use_residual = False
+            # else:
+            #     if rand_val < res_prob and use_res:
+            #         use_residual = True
+            #     else:
+            #         use_residual = False
                 
-            if not use_residual:
+            if use_random:
                 # for initial round of data collection, we sample from standard gaussian noise
                 noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
 
@@ -415,14 +415,14 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 rng, key = jax.random.split(rng)
                 rand_val = jax.random.uniform(key, ())
                 
+                # if use_random:
+                #     use_residual = False
+                # else:
+                #     if rand_val < res_prob and use_res:
+                #         use_residual = True
+                #     else:
+                #         use_residual = False
                 if use_random:
-                    use_residual = False
-                else:
-                    if rand_val < res_prob and use_res:
-                        use_residual = True
-                    else:
-                        use_residual = False
-                if not use_residual:
                     # for initial evaluation, we sample from standard gaussian noise to evaluate the base policy's performance
                     noise = jax.random.normal(rng, (1, 50, 32))
                 else:

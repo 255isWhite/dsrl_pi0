@@ -13,23 +13,23 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=1600_v1,kl_coeff=0.0"
-  "label=1600_v1,kl_coeff=0.1"
-  "label=1600_v1,kl_coeff=0.5"
-  "label=1600_v1,kl_coeff=1.0"
-  "label=1600_v1,kl_coeff=2.0"
-  "label=1600_v1,kl_coeff=5.0"
-  "label=1600_v1,kl_coeff=10.0"
-  "label=1600_v1,kl_coeff=20.0"
+  "label=1600_v3,kl_coeff=0.0"
+  "label=1600_v3,kl_coeff=0.1"
+  "label=1600_v3,kl_coeff=0.5"
+  "label=1600_v3,kl_coeff=1.0"
+  "label=1600_v3,kl_coeff=2.0"
+  "label=1600_v3,kl_coeff=5.0"
+  "label=1600_v3,kl_coeff=10.0"
+  "label=1600_v3,kl_coeff=20.0"
 
-  "label=1600_v1,kl_coeff=0.0,task_id=1"
-  "label=1600_v1,kl_coeff=0.1,task_id=1"
-  "label=1600_v1,kl_coeff=0.5,task_id=1"
-  "label=1600_v1,kl_coeff=1.0,task_id=1"
-  "label=1600_v1,kl_coeff=2.0,task_id=1"
-  "label=1600_v1,kl_coeff=5.0,task_id=1"
-  "label=1600_v1,kl_coeff=10.0,task_id=1"
-  "label=1600_v1,kl_coeff=20.0,task_id=1"
+  "label=1600_v3,kl_coeff=0.0,task_id=1"
+  "label=1600_v3,kl_coeff=0.1,task_id=1"
+  "label=1600_v3,kl_coeff=0.5,task_id=1"
+  "label=1600_v3,kl_coeff=1.0,task_id=1"
+  "label=1600_v3,kl_coeff=2.0,task_id=1"
+  "label=1600_v3,kl_coeff=5.0,task_id=1"
+  "label=1600_v3,kl_coeff=10.0,task_id=1"
+  "label=1600_v3,kl_coeff=20.0,task_id=1"
 )
 
 
@@ -232,7 +232,7 @@ start_task_on_slot() {
       --query_freq 20 \
       --task_id 9 \
       --task_suite libero_10 \
-      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_libero40_10-30shot/20000 \
+      --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
       --pi0_config pi0_libero40_10-30shot \
       --eval_at_begin 1 \
       --qwarmup 0 \
@@ -242,6 +242,7 @@ start_task_on_slot() {
       --res_H 60000 \
       --q_hidden_dim 256 \
       --use_res 0 \
+      --action_magnitude 3.0 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?
