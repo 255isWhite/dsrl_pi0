@@ -20,7 +20,7 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
@@ -37,6 +37,9 @@ from jaxrl2.utils.target_update import soft_target_update
 
 class TrainState(train_state.TrainState):
     batch_stats: Any
+    
+def count_parameters(params):
+    return sum(np.prod(p.shape) for p in jax.tree_util.tree_leaves(params))
 
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
 def _update_jit(
@@ -175,6 +178,7 @@ class PixelSACLearner(Agent):
                  num_cameras: int = 1,
                  kl_coeff: float = 1.0,
                  decay_kl: int = 0,
+                 q_hidden_dim: int = 256,
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -192,6 +196,7 @@ class PixelSACLearner(Agent):
         self.critic_reduction = critic_reduction
         self.kl_coeff = kl_coeff
         self.decay_kl = decay_kl
+        self.q_hidden_dim = q_hidden_dim
 
         rng = jax.random.PRNGKey(seed)
         rng, actor_key, critic_key, temp_key = jax.random.split(rng, 4)
@@ -243,10 +248,12 @@ class PixelSACLearner(Agent):
                                   batch_stats=actor_batch_stats)
 
         critic_def = StateActionEnsemble(hidden_dims, num_qs=num_qs)
-        critic_def = PixelMultiplexer(encoder=encoder_def,
+        action_chunk_def = ActionChunkEncoder(out_dim=self.q_hidden_dim)
+        critic_def = ChunkPixelMultiplexer(encoder=encoder_def,
                                       network=critic_def,
-                                      latent_dim=latent_dim,
-                                      use_bottleneck=use_bottleneck
+                                      latent_dim=self.q_hidden_dim,
+                                      use_bottleneck=use_bottleneck,
+                                      chunk_encoder=action_chunk_def,
                                       )
         print(critic_def)
         critic_def_init = critic_def.init(critic_key, observations, actions)
@@ -280,6 +287,10 @@ class PixelSACLearner(Agent):
             self.target_entropy = float(target_entropy)
         print(f'target_entropy: {self.target_entropy}')
         print(self.critic_reduction)
+        # count params in how many Millions
+        print('actor params (M): ', count_parameters(self._actor.params)/1e6)
+        print('critic params (M): ', count_parameters(self._critic.params)/1e6)
+        print('total params (M): ', (count_parameters(self._actor.params)+count_parameters(self._critic.params))/1e6)
         
 
     def update(self, batch: FrozenDict) -> Dict[str, float]:

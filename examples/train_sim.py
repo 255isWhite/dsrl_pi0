@@ -76,7 +76,7 @@ class DummyEnv(gym.ObservationWrapper):
                 state_dim = 14
             obs_dict['state'] = Box(low=-1.0, high=1.0, shape=(state_dim, 1), dtype=np.float32)
         self.observation_space = Dict(obs_dict)
-        self.action_space = Box(low=-1, high=1, shape=(1, 32,), dtype=np.float32) # 32 is the noise action space of pi 0
+        self.action_space = Box(low=-1, high=1, shape=(50, 32,), dtype=np.float32) # 32 is the noise action space of pi 0
 
 
 def main(variant):
@@ -169,7 +169,7 @@ def main(variant):
 
     if variant.algorithm == 'pixel_sac':
         print("Using pixel sac learner")
-        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl ,**kwargs)
+        agent = PixelSACLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, q_hidden_dim=variant.q_hidden_dim, **kwargs)
     elif variant.algorithm == 'pixel_sac_residual':
         print("Using residual learner")
         agent = PixelSACResidualLearner(variant.seed, sample_obs, sample_action, kl_coeff=variant.kl_coeff, decay_kl=variant.decay_kl, res_coeff=variant.res_coeff, dp_unnorm_transform=dp_unnorm_transform, td3_noise_scale=variant.td3_noise_scale, **kwargs)

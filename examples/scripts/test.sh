@@ -14,7 +14,7 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=true
 export XLA_PYTHON_CLIENT_MEM_FRACTION=0.15
 
 JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
---algorithm pixel_sac_residual_2td \
+--algorithm pixel_sac \
 --env libero \
 --wandb_project ${proj_name} \
 --batch_size 256 \
@@ -29,13 +29,12 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --resize_image 64 \
 --action_magnitude 1.0 \
 --query_freq 20 \
---hidden_dims 128 \
 --task_id 57 \
 --task_suite libero_90 \
 --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/libero130_1shot/20000 \
 --pi0_config pi0_libero130_1shot \
 --eval_at_begin 1 \
 --kl_coeff 1.0 \
---qwarmup 1 \
+--qwarmup 0 \
 --max_timesteps 40 \
---use_res 1 \
+--use_res 0 \
