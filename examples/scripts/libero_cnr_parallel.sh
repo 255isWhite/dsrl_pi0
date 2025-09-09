@@ -13,45 +13,15 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.1"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.1"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.1"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.1"
+  "label=full_noBias,res_H=20000,res_coeff=0.1"
+  "label=full_noBias,res_H=200000,res_coeff=0.1"
+  "label=full_noBias,res_H=20000,res_coeff=0.03"
+  "label=full_noBias,res_H=200000,res_coeff=0.03"
 
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.2"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.2"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.2"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.2"
-
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.01"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.01"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.01"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.01"
-
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.03"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.03"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.03"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.03"
-
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.1,task_id=9"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.1,task_id=9"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.1,task_id=9"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.1,task_id=9"
-
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.2,task_id=9"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.2,task_id=9"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.2,task_id=9"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.2,task_id=9"
-
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.01,task_id=9"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.01,task_id=9"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.01,task_id=9"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.01,task_id=9"
-
-  "label=oneQ_fix2,res_H=20000,res_coeff=0.03,task_id=9"
-  "label=oneQ_fix2,res_H=50000,res_coeff=0.03,task_id=9"
-  "label=oneQ_fix2,res_H=100000,res_coeff=0.03,task_id=9"
-  "label=oneQ_fix2,res_H=200000,res_coeff=0.03,task_id=9"
+  "label=full_noBias,res_H=20000,res_coeff=0.2"
+  "label=full_noBias,res_H=200000,res_coeff=0.2"
+  "label=full_noBias,res_H=20000,res_coeff=0.01"
+  "label=full_noBias,res_H=200000,res_coeff=0.01"
 )
 
 
@@ -254,7 +224,7 @@ start_task_on_slot() {
       --query_freq 20 \
       --task_id 1 \
       --task_suite libero_10 \
-      --pi0_model /mnt/ssd1/data/zh1/pi0/checkpoints/pi0_libero40_10-30shot/20000 \
+      --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
       --pi0_config pi0_libero40_10-30shot \
       --eval_at_begin 1 \
       --qwarmup 0 \
