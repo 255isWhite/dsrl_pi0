@@ -248,8 +248,8 @@ class ReplayBuffer(Dataset):
 
 
     def restore(self, filename):
-        save_dict = np.load(filename, allow_pickle=True)[0]
-        # todo test this:
+        with open(filename, 'rb') as f:
+            save_dict = pickle.load(f)
         self.data = save_dict['data']
         self.size = save_dict['size']
         self._traj_counter = save_dict['_traj_counter']

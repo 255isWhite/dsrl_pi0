@@ -11,12 +11,10 @@ proj_name="CoupleNR_LIBERO"
 #   "qwarmup=1,seed=43"
 # )
 
-gpu_list=(4 5 6 7)                          # 物理 GPU ID
+gpu_list=(0 1)                          # 物理 GPU ID
 ablations=(
-  "label=dsrl,task_id=6,task_suite=libero_10,max_timesteps=500"
-  "label=dsrl,task_id=7,task_suite=libero_10,max_timesteps=500"
-  "label=dsrl,task_id=8,task_suite=libero_10,max_timesteps=500"
-  "label=dsrl,task_id=9,task_suite=libero_10,max_timesteps=500"
+  "label=dsrl,task_id=5,task_suite=libero_object,max_timesteps=400,kl_coeff=0.0"
+  "label=dsrl,task_id=4,task_suite=libero_spatial,max_timesteps=400,kl_coeff=0.0"
 )
 
 
@@ -31,7 +29,7 @@ export DISPLAY=:0
 export MUJOCO_GL=egl
 export PYOPENGL_PLATFORM=egl
 export OPENPI_DATA_HOME=./openpi
-export EXP=./logs/$proj_name;
+export EXP=/data0/zh1/dsrl;
 
 # ====== 新增：进程 PID 记录与 Ctrl+C 杀停 ======
 pids=()
@@ -213,7 +211,7 @@ start_task_on_slot() {
       --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
-      --eval_episodes 10 \
+      --eval_episodes 20 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --query_freq 20 \
@@ -227,6 +225,7 @@ start_task_on_slot() {
       --res_coeff 0.1 \
       --max_timesteps 400 \
       --res_H 100000 \
+      --checkpoint_interval 50000 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?

@@ -193,8 +193,9 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                             if hasattr(agent, 'perform_eval'):
                                 agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
-                    if variant.checkpoint_interval != -1 and i % variant.checkpoint_interval == 0:
+                    if variant.checkpoint_interval != -1 and i % variant.checkpoint_interval == 0 and i > 0:
                         agent.save_checkpoint(variant.outputdir, i, variant.checkpoint_interval)
+                        replay_buffer.save(f'{variant.outputdir}/replay_buffer_{i}.pkl')
 
             
 def add_online_data_to_buffer(variant, traj, online_replay_buffer):
