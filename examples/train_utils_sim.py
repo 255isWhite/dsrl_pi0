@@ -292,22 +292,14 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             if use_random:
                 # for initial round of data collection, we sample from standard gaussian noise
                 actions_noise = jax.random.normal(key, agent.action_chunk_shape)
-                actions_noise_interp = jax.image.resize(
-                    actions_noise, 
-                    shape=(50, 32), 
-                    method="linear"   # 支持 "linear", "nearest", "cubic"
-                )
-                noise = actions_noise_interp[None]
+                actions_noise_repeat = jnp.repeat(actions_noise, 10, axis=0)
+                noise = actions_noise_repeat[None]
             else:
                 # sac agent predicts the noise for diffusion model
                 actions_noise = agent.sample_actions(obs_dict)
                 actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
-                actions_noise_interp = jax.image.resize(
-                    actions_noise, 
-                    shape=(50, 32), 
-                    method="linear"   # 支持 "linear", "nearest", "cubic"
-                )
-                noise = actions_noise_interp[None] # add batch dim
+                actions_noise_repeat = jnp.repeat(actions_noise, 10, axis=0)
+                noise = actions_noise_repeat[None] # add batch dim
 
             action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
             
@@ -438,13 +430,9 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 else:
                     actions_noise = agent.sample_actions(obs_dict)
                     actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
-                    actions_noise_interp = jax.image.resize(
-                        actions_noise, 
-                        shape=(50, 32), 
-                        method="linear"   # 支持 "linear", "nearest", "cubic"
-                    )
-                    noise = actions_noise_interp[None] # add batch dim
-                    
+                    actions_noise_repeat = jnp.repeat(actions_noise, 10, axis=0)
+                    noise = actions_noise_repeat[None] # add batch dim
+
                 action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
 
                 # # a.

@@ -13,23 +13,23 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=liner_interp_5,kl_coeff=0.0"
-  "label=liner_interp_5,kl_coeff=0.1"
-  "label=liner_interp_5,kl_coeff=0.5"
-  "label=liner_interp_5,kl_coeff=1.0"
-  "label=liner_interp_5,kl_coeff=2.0"
-  "label=liner_interp_5,kl_coeff=5.0"
-  "label=liner_interp_5,kl_coeff=10.0"
-  "label=liner_interp_5,kl_coeff=20.0"
+  "label=repeat_5_v2,kl_coeff=0.0"
+  "label=repeat_5_v2,kl_coeff=0.1"
+  "label=repeat_5_v2,kl_coeff=0.5"
+  "label=repeat_5_v2,kl_coeff=1.0"
+  "label=repeat_5_v2,kl_coeff=2.0"
+  "label=repeat_5_v2,kl_coeff=5.0"
+  "label=repeat_5_v2,kl_coeff=10.0"
+  "label=repeat_5_v2,kl_coeff=20.0"
 
-  "label=liner_interp_5,kl_coeff=0.0,task_id=1"
-  "label=liner_interp_5,kl_coeff=0.1,task_id=1"
-  "label=liner_interp_5,kl_coeff=0.5,task_id=1"
-  "label=liner_interp_5,kl_coeff=1.0,task_id=1"
-  "label=liner_interp_5,kl_coeff=2.0,task_id=1"
-  "label=liner_interp_5,kl_coeff=5.0,task_id=1"
-  "label=liner_interp_5,kl_coeff=10.0,task_id=1"
-  "label=liner_interp_5,kl_coeff=20.0,task_id=1"
+  "label=repeat_5_v2,kl_coeff=0.0,task_id=1"
+  "label=repeat_5_v2,kl_coeff=0.1,task_id=1"
+  "label=repeat_5_v2,kl_coeff=0.5,task_id=1"
+  "label=repeat_5_v2,kl_coeff=1.0,task_id=1"
+  "label=repeat_5_v2,kl_coeff=2.0,task_id=1"
+  "label=repeat_5_v2,kl_coeff=5.0,task_id=1"
+  "label=repeat_5_v2,kl_coeff=10.0,task_id=1"
+  "label=repeat_5_v2,kl_coeff=20.0,task_id=1"
   
 )
 
@@ -243,7 +243,7 @@ start_task_on_slot() {
       --res_H 60000 \
       --q_hidden_dim 256 \
       --use_res 0 \
-      --action_magnitude 3.0 \
+      --action_magnitude 1.0 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?
