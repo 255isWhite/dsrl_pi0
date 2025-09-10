@@ -20,16 +20,17 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
-from jaxrl2.agents.pixel_sac.actor_updater import update_actor
+from jaxrl2.agents.pixel_sac.actor_updater import update_actor, distill_actor
 from jaxrl2.agents.pixel_sac.critic_updater import update_critic, update_critic_wo_actor
 from jaxrl2.agents.pixel_sac.temperature_updater import update_temperature
 from jaxrl2.agents.pixel_sac.temperature import Temperature
 from jaxrl2.data.dataset import DatasetDict
 from jaxrl2.networks.learned_std_normal_policy import LearnedStdTanhNormalPolicy
+from jaxrl2.networks.deterministic_policy import DeterministicPolicy
 from jaxrl2.networks.values import StateActionEnsemble
 from jaxrl2.types import Params, PRNGKey
 from jaxrl2.utils.target_update import soft_target_update
@@ -37,6 +38,109 @@ from jaxrl2.utils.target_update import soft_target_update
 
 class TrainState(train_state.TrainState):
     batch_stats: Any
+    
+@functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
+def _distill_jit(
+    rng: PRNGKey, actor: TrainState, batch: TrainState,
+    discount: float, tau: float, target_entropy: float,
+    critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int, kl_coeff: float
+) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
+    aug_pixels = batch['observations']['pixels']
+    aug_next_pixels = batch['next_observations']['pixels']
+    if batch['observations']['pixels'].squeeze().ndim != 2:
+        rng, key = jax.random.split(rng)
+        aug_pixels = batched_random_crop(key, batch['observations']['pixels'])
+
+        if color_jitter:
+            rng, key = jax.random.split(rng)
+            if num_cameras > 1:
+                for i in range(num_cameras):
+                    aug_pixels = aug_pixels.at[:,:,:,i*3:(i+1)*3].set((color_transform(key, aug_pixels[:,:,:,i*3:(i+1)*3].astype(jnp.float32)/255.)*255).astype(jnp.uint8))
+            else:
+                aug_pixels = (color_transform(key, aug_pixels.astype(jnp.float32)/255.)*255).astype(jnp.uint8)
+
+    observations = batch['observations'].copy(add_or_replace={'pixels': aug_pixels})
+    batch = batch.copy(add_or_replace={'observations': observations})
+
+    key, rng = jax.random.split(rng)
+    if aug_next:
+        rng, key = jax.random.split(rng)
+        aug_next_pixels = batched_random_crop(key, batch['next_observations']['pixels'])
+        if color_jitter:
+            rng, key = jax.random.split(rng)
+            if num_cameras > 1:
+                for i in range(num_cameras):
+                    aug_next_pixels = aug_next_pixels.at[:,:,:,i*3:(i+1)*3].set((color_transform(key, aug_next_pixels[:,:,:,i*3:(i+1)*3].astype(jnp.float32)/255.)*255).astype(jnp.uint8))
+            else:
+                aug_next_pixels = (color_transform(key, aug_next_pixels.astype(jnp.float32)/255.)*255).astype(jnp.uint8)
+        next_observations = batch['next_observations'].copy(
+            add_or_replace={'pixels': aug_next_pixels})
+        batch = batch.copy(add_or_replace={'next_observations': next_observations})
+    
+    key, rng = jax.random.split(rng)
+    new_actor, actor_info = distill_actor(key, actor, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
+
+    return rng, new_actor,{
+        **actor_info,
+    }
+    
+@functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
+def _update_bc_jit(
+    rng: PRNGKey, actor: TrainState, distill_actor: TrainState, critic: TrainState,
+    target_critic_params: Params, temp: TrainState, batch: TrainState,
+    discount: float, tau: float, target_entropy: float,
+    critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int, kl_coeff: float
+) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
+    aug_pixels = batch['observations']['pixels']
+    aug_next_pixels = batch['next_observations']['pixels']
+    if batch['observations']['pixels'].squeeze().ndim != 2:
+        rng, key = jax.random.split(rng)
+        aug_pixels = batched_random_crop(key, batch['observations']['pixels'])
+
+        if color_jitter:
+            rng, key = jax.random.split(rng)
+            if num_cameras > 1:
+                for i in range(num_cameras):
+                    aug_pixels = aug_pixels.at[:,:,:,i*3:(i+1)*3].set((color_transform(key, aug_pixels[:,:,:,i*3:(i+1)*3].astype(jnp.float32)/255.)*255).astype(jnp.uint8))
+            else:
+                aug_pixels = (color_transform(key, aug_pixels.astype(jnp.float32)/255.)*255).astype(jnp.uint8)
+
+    observations = batch['observations'].copy(add_or_replace={'pixels': aug_pixels})
+    batch = batch.copy(add_or_replace={'observations': observations})
+
+    key, rng = jax.random.split(rng)
+    if aug_next:
+        rng, key = jax.random.split(rng)
+        aug_next_pixels = batched_random_crop(key, batch['next_observations']['pixels'])
+        if color_jitter:
+            rng, key = jax.random.split(rng)
+            if num_cameras > 1:
+                for i in range(num_cameras):
+                    aug_next_pixels = aug_next_pixels.at[:,:,:,i*3:(i+1)*3].set((color_transform(key, aug_next_pixels[:,:,:,i*3:(i+1)*3].astype(jnp.float32)/255.)*255).astype(jnp.uint8))
+            else:
+                aug_next_pixels = (color_transform(key, aug_next_pixels.astype(jnp.float32)/255.)*255).astype(jnp.uint8)
+        next_observations = batch['next_observations'].copy(
+            add_or_replace={'pixels': aug_next_pixels})
+        batch = batch.copy(add_or_replace={'next_observations': next_observations})
+    
+    key, rng = jax.random.split(rng)
+    target_critic = critic.replace(params=target_critic_params)
+    new_critic, critic_info = update_critic(key, actor, critic, target_critic, temp, batch, discount, critic_reduction=critic_reduction)
+    new_target_critic_params = soft_target_update(new_critic.params, target_critic_params, tau)
+    
+    key, rng = jax.random.split(rng)
+    new_actor, actor_info = update_actor(key, actor, new_critic, temp, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
+    new_temp, alpha_info = update_temperature(temp, actor_info['entropy'], target_entropy)
+
+    key, rng = jax.random.split(rng)
+    new_distill_actor, distill_actor_info = distill_actor(key, distill_actor, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
+    
+    return rng, new_actor, new_distill_actor, new_critic, new_target_critic_params, new_temp, {
+        **critic_info,
+        **actor_info,
+        **alpha_info,
+        **distill_actor_info
+    }
 
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
 def _update_jit(
@@ -151,6 +255,7 @@ class PixelSACLearner(Agent):
                  actor_lr: float = 3e-4,
                  critic_lr: float = 3e-4,
                  temp_lr: float = 3e-4,
+                 distill_lr: float = 3e-4,
                  decay_steps: Optional[int] = None,
                  hidden_dims: Sequence[int] = (256, 256),
                  cnn_features: Sequence[int] = (32, 32, 32, 32),
@@ -175,6 +280,9 @@ class PixelSACLearner(Agent):
                  num_cameras: int = 1,
                  kl_coeff: float = 1.0,
                  decay_kl: int = 0,
+                 chunk_len: int = 20,
+                 distill_action_dim: int = 7,
+                 distill_hidden_dim: int = 128,
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -192,9 +300,12 @@ class PixelSACLearner(Agent):
         self.critic_reduction = critic_reduction
         self.kl_coeff = kl_coeff
         self.decay_kl = decay_kl
+        self.chunk_len = chunk_len
+        self.distill_action_dim = distill_action_dim
+        self.distill_hidden_dim = distill_hidden_dim
 
         rng = jax.random.PRNGKey(seed)
-        rng, actor_key, critic_key, temp_key = jax.random.split(rng, 4)
+        rng, actor_key, critic_key, temp_key, distill_actor_key = jax.random.split(rng, 5)
 
         if encoder_type == 'small':
             encoder_def = Encoder(cnn_features, cnn_strides, cnn_padding)
@@ -268,10 +379,27 @@ class PixelSACLearner(Agent):
                                  tx=optax.adam(learning_rate=temp_lr),
                                  batch_stats=None)
 
+        # residual head part
+        distill_policy_def = DeterministicPolicy(hidden_dims, self.distill_action_dim * self.chunk_len, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
+        distill_actor_def = LargePixelMultiplexer(encoder=encoder_def,
+                                     network=distill_policy_def,
+                                     latent_dim=self.distill_hidden_dim,
+                                     use_bottleneck=use_bottleneck
+                                     )
+        print(distill_actor_def)
+        distill_actor_def_init = distill_actor_def.init(distill_actor_key, observations, actions)
+        distill_actor_params = distill_actor_def_init['params']
+        distill_actor_batch_stats = distill_actor_def_init['batch_stats'] if 'batch_stats' in distill_actor_def_init else None
+
+        distill_actor = TrainState.create(apply_fn=distill_actor_def.apply,
+                                  params=distill_actor_params,
+                                  tx=optax.adam(learning_rate=distill_lr),
+                                  batch_stats=distill_actor_batch_stats)
 
         self._rng = rng
         self._actor = actor
         self._critic = critic
+        self._distill_actor = distill_actor
         self._target_critic_params = target_critic_params
         self._temp = temp
         if target_entropy is None or target_entropy == 'auto':
@@ -281,6 +409,18 @@ class PixelSACLearner(Agent):
         print(f'target_entropy: {self.target_entropy}')
         print(self.critic_reduction)
         
+    def update_with_bc(self, batch: FrozenDict) -> Dict[str, float]:
+        new_rng, new_actor, new_distill_actor, new_critic, new_target_critic, new_temp, info = _update_bc_jit(
+            self._rng, self._actor, self._distill_actor, self._critic, self._target_critic_params, self._temp, batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, self.aug_next, self.num_cameras, self.kl_coeff
+            )
+
+        self._rng = new_rng
+        self._actor = new_actor
+        self._distill_actor = new_distill_actor
+        self._critic = new_critic
+        self._target_critic_params = new_target_critic
+        self._temp = new_temp
+        return info
 
     def update(self, batch: FrozenDict) -> Dict[str, float]:
         new_rng, new_actor, new_critic, new_target_critic, new_temp, info = _update_jit(
@@ -302,6 +442,15 @@ class PixelSACLearner(Agent):
         self._rng = new_rng
         self._critic = new_critic
         self._target_critic_params = new_target_critic
+        return info
+    
+    def distill(self, batch: FrozenDict) -> Dict[str, float]:
+        new_rng, new_distill_actor, info = _distill_jit(
+            self._rng, self._distill_actor, batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, self.aug_next, self.num_cameras, self.kl_coeff
+            )
+
+        self._rng = new_rng
+        self._distill_actor = new_distill_actor
         return info
 
     def perform_eval(self, variant, i, wandb_logger, eval_buffer, eval_buffer_iterator, eval_env):

@@ -27,7 +27,7 @@ def _init_replay_dict(obs_space: gym.Space,
 
 class ReplayBuffer(Dataset):
     
-    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, chunk_length: int = 1, res_action_dim: int = 4):
+    def __init__(self, observation_space: gym.Space, action_space: gym.Space, capacity: int, chunk_length: int = 1, res_action_dim: int = 7):
         self.observation_space = observation_space
         self.action_space = action_space
         self.capacity = capacity
@@ -45,6 +45,8 @@ class ReplayBuffer(Dataset):
         clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         next_actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
+        distill_noise_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
+        distill_clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         rewards = np.empty((self.capacity, ), dtype=np.float32)
         masks = np.empty((self.capacity, ), dtype=np.float32)
         discount = np.empty((self.capacity, ), dtype=np.float32)
@@ -62,6 +64,8 @@ class ReplayBuffer(Dataset):
             'rewards': rewards,
             'masks': masks,
             'discount': discount,
+            'distill_noise_actions': distill_noise_actions,
+            'distill_clean_actions': distill_clean_actions,
         }
 
         self.size = 0
@@ -95,6 +99,8 @@ class ReplayBuffer(Dataset):
         clean_actions_list = []
         actual_norm_actions_list = []
         next_actual_norm_actions_list = []
+        distill_noise_actions_list = []
+        distill_clean_actions_list = []
 
         for i in self.which_trajs:
             start, end = self.traj_bounds[i]
@@ -119,6 +125,8 @@ class ReplayBuffer(Dataset):
             rewards_list.append(self.data['rewards'][start:end])
             terminals_list.append(1-self.data['masks'][start:end])
             masks_list.append(self.data['masks'][start:end])
+            distill_noise_actions_list.append(self.data['distill_noise_actions'][start:end])
+            distill_clean_actions_list.append(self.data['distill_clean_actions'][start:end])
 
 
         
@@ -134,6 +142,8 @@ class ReplayBuffer(Dataset):
             'rewards': rewards_list,
             'terminals': terminals_list,
             'masks': masks_list,
+            'distill_noise_actions': distill_noise_actions_list,
+            'distill_clean_actions': distill_clean_actions_list,
         }
         return batch
         
@@ -152,6 +162,8 @@ class ReplayBuffer(Dataset):
             rewards = np.empty((self.capacity, ), dtype=np.float32)
             masks = np.empty((self.capacity, ), dtype=np.float32)
             discount = np.empty((self.capacity, ), dtype=np.float32)
+            distill_noise_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
+            distill_clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
 
             data_new = {
                 'observations': observations,
@@ -166,6 +178,8 @@ class ReplayBuffer(Dataset):
                 'rewards': rewards,
                 'masks': masks,
                 'discount': discount,
+                'distill_noise_actions': distill_noise_actions,
+                'distill_clean_actions': distill_clean_actions,
             }
 
             for x in data_new:

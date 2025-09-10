@@ -97,3 +97,43 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
         new_actor = actor.apply_gradients(grads=grads)
 
     return new_actor, info
+
+
+def distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', kl_coeff:float=1.0) -> Tuple[TrainState, Dict[str, float]]:
+
+    key, key_act = jax.random.split(key, num=2)
+    batch_size = batch['actions'].shape[0]
+
+    def actor_loss_fn(
+            actor_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
+        if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
+            actions, raws, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['observations'], batch['distill_noise_actions'], mutable=['batch_stats'])
+        else:
+            actions, raws = actor.apply_fn({'params': actor_params}, batch['observations'], batch['distill_noise_actions'])
+            new_model_state = {}
+
+        gt_actions = batch['distill_clean_actions'].reshape(batch_size,-1)
+        actor_loss = (actions.reshape(batch_size,-1) - gt_actions)**2
+        actor_loss = actor_loss.mean()
+
+        things_to_log = {
+            'actor_loss': actor_loss,
+            'distill_noise_mean': batch['distill_noise_actions'].mean(),
+            'distill_noise_std': batch['distill_noise_actions'].std(),
+            'distill_noise_max': batch['distill_noise_actions'].max(),
+            'distill_noise_min': batch['distill_noise_actions'].min(),
+            'distill_clean_mean': gt_actions.mean(),
+            'distill_clean_std': gt_actions.std(),
+            'distill_clean_max': gt_actions.max(),
+            'distill_clean_min': gt_actions.min(),
+        }
+        return actor_loss, (things_to_log, new_model_state)
+
+    grads, (info, new_model_state) = jax.grad(actor_loss_fn, has_aux=True)(actor.params)
+    
+    if 'batch_stats' in new_model_state:
+        new_actor = actor.apply_gradients(grads=grads, batch_stats=new_model_state['batch_stats'])
+    else:
+        new_actor = actor.apply_gradients(grads=grads)
+
+    return new_actor, info

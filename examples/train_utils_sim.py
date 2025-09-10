@@ -161,6 +161,8 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                             update_info = agent.update(batch)
                             res_update_info = {}                                            
                 
+                    distill_info = agent.distill(batch)
+                
                     pbar.update()
                     i += 1
                     
@@ -180,6 +182,15 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                                 wandb_logger.log({f'residual/{k}': v}, step=i)
                             elif v.ndim <= 2 and i%variant.media_log_interval == 0:
                                 wandb_logger.log_histogram(f'residual/{k}', v, i)
+                            else:
+                                continue
+                            
+                        distill_info = {k: jax.device_get(v) for k, v in distill_info.items()}
+                        for k, v in distill_info.items():
+                            if v.ndim == 0:
+                                wandb_logger.log({f'distill/{k}': v}, step=i)
+                            elif v.ndim <= 2 and i%variant.media_log_interval == 0:
+                                wandb_logger.log_histogram(f'distill/{k}', v, i)
                             else:
                                 continue
                             
@@ -208,6 +219,8 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
     episode_len = len(actions)
     rewards = np.array(traj['rewards'])
     masks = np.array(traj['masks'])
+    distill_noise_actions = np.array(traj['distill_noise']) # (T, chunk_size, action_dim )
+    distill_clean_actions = np.array(traj['distill_clean']) # (T, chunk_size, action_dim )
 
     for t in range(episode_len):
         obs = traj['observations'][t]
@@ -231,7 +244,9 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
             next_actual_norm_actions=actual_norm_actions[t + 1] if t < episode_len - 1 else actual_norm_actions[t],
             rewards=rewards[t],
             masks=masks[t],
-            discount=variant.discount ** discount_horizon
+            discount=variant.discount ** discount_horizon,
+            distill_noise_actions=distill_noise_actions[t],
+            distill_clean_actions=distill_clean_actions[t],
         )
         online_replay_buffer.insert(insert_dict)
     online_replay_buffer.increment_traj_counter()
@@ -257,6 +272,8 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     norm_action_list = []
     clean_action_list = []
     actual_norm_action_list = []
+    distill_noise_list = []
+    distill_clean_list = []
 
     for t in tqdm(range(max_timesteps)):
         curr_image = obs_to_img(obs, variant)
@@ -316,6 +333,17 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             clean_action_list.append(action_dict["actions"][:query_frequency])
             actual_norm_action_list.append(actual_norm_action)
             
+            # for distill only
+            rng, key = jax.random.split(rng)
+            distill_noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
+            distill_noise_repeat = jax.numpy.repeat(distill_noise[:, -1:, :], 50 - distill_noise.shape[1], axis=1)
+            distill_noise = jax.numpy.concatenate([distill_noise, distill_noise_repeat], axis=1)
+            
+            distill_action_dict = agent_dp.infer(obs_pi_zero, noise=distill_noise)
+            
+            distill_noise_list.append(distill_noise[0, :agent.action_chunk_shape[0], :])
+            distill_clean_list.append(distill_action_dict["norm_actions"][:query_frequency])
+            
         action_t = actions[t % query_frequency]
         if 'libero' in variant.env:
             obs, reward, done, _ = env.step(action_t)
@@ -368,7 +396,9 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         'is_success': is_success,
         'episode_return': episode_return,
         'images': image_list,
-        'env_steps': t + 1 
+        'env_steps': t + 1,
+        'distill_noise': distill_noise_list,
+        'distill_clean': distill_clean_list,
     }
 
 def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_random=False):
