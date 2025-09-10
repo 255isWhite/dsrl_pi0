@@ -151,6 +151,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                             else:
                                 update_info = agent.update_wo_actor(batch)
                                 res_update_info = {}
+                                distill_info = agent.distill(batch)
                         else:
                             update_info = {}
                             res_update_info = {}
@@ -158,11 +159,10 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                         if variant.use_res:
                             update_info, res_update_info = agent.update(batch, res_prob)
                         else:
-                            update_info = agent.update(batch)
-                            res_update_info = {}                                            
-                
-                    distill_info = agent.distill(batch)
-                
+                            # update_info = agent.update(batch)
+                            res_update_info = {}               
+                            update_info, distill_info = agent.update_with_bc(batch)                             
+
                     pbar.update()
                     i += 1
                     
@@ -335,13 +335,11 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             
             # for distill only
             rng, key = jax.random.split(rng)
-            distill_noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
-            distill_noise_repeat = jax.numpy.repeat(distill_noise[:, -1:, :], 50 - distill_noise.shape[1], axis=1)
-            distill_noise = jax.numpy.concatenate([distill_noise, distill_noise_repeat], axis=1)
+            distill_noise = jax.random.normal(rng, (1, 50, 32))
             
             distill_action_dict = agent_dp.infer(obs_pi_zero, noise=distill_noise)
             
-            distill_noise_list.append(distill_noise[0, :agent.action_chunk_shape[0], :])
+            distill_noise_list.append(distill_noise[0])
             distill_clean_list.append(distill_action_dict["norm_actions"][:query_frequency])
             
         action_t = actions[t % query_frequency]

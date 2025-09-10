@@ -20,11 +20,11 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
-from jaxrl2.agents.pixel_sac.actor_updater import update_actor, distill_actor
+from jaxrl2.agents.pixel_sac.actor_updater import update_actor, update_distill_actor, update_actor_with_bc
 from jaxrl2.agents.pixel_sac.critic_updater import update_critic, update_critic_wo_actor
 from jaxrl2.agents.pixel_sac.temperature_updater import update_temperature
 from jaxrl2.agents.pixel_sac.temperature import Temperature
@@ -38,7 +38,10 @@ from jaxrl2.utils.target_update import soft_target_update
 
 class TrainState(train_state.TrainState):
     batch_stats: Any
-    
+
+def count_parameters(params):
+    return sum(np.prod(p.shape) for p in jax.tree_util.tree_leaves(params))
+
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
 def _distill_jit(
     rng: PRNGKey, actor: TrainState, batch: TrainState,
@@ -78,7 +81,7 @@ def _distill_jit(
         batch = batch.copy(add_or_replace={'next_observations': next_observations})
     
     key, rng = jax.random.split(rng)
-    new_actor, actor_info = distill_actor(key, actor, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
+    new_actor, actor_info = update_distill_actor(key, actor, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
 
     return rng, new_actor,{
         **actor_info,
@@ -129,18 +132,17 @@ def _update_bc_jit(
     new_target_critic_params = soft_target_update(new_critic.params, target_critic_params, tau)
     
     key, rng = jax.random.split(rng)
-    new_actor, actor_info = update_actor(key, actor, new_critic, temp, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
+    new_actor, actor_info = update_actor_with_bc(key, actor, distill_actor, new_critic, temp, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
     new_temp, alpha_info = update_temperature(temp, actor_info['entropy'], target_entropy)
 
     key, rng = jax.random.split(rng)
-    new_distill_actor, distill_actor_info = distill_actor(key, distill_actor, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
+    new_distill_actor, distill_actor_info = update_distill_actor(key, distill_actor, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
     
     return rng, new_actor, new_distill_actor, new_critic, new_target_critic_params, new_temp, {
         **critic_info,
         **actor_info,
         **alpha_info,
-        **distill_actor_info
-    }
+    }, distill_actor_info
 
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
 def _update_jit(
@@ -378,16 +380,18 @@ class PixelSACLearner(Agent):
                                  params=temp_params,
                                  tx=optax.adam(learning_rate=temp_lr),
                                  batch_stats=None)
-
+        action_chunk_def = ActionChunkEncoder(out_dim=self.distill_hidden_dim)
         # residual head part
-        distill_policy_def = DeterministicPolicy(hidden_dims, self.distill_action_dim * self.chunk_len, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
-        distill_actor_def = LargePixelMultiplexer(encoder=encoder_def,
+        distill_policy_def = DeterministicPolicy(hidden_dims, 20 * 7, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
+        distill_actor_def = ChunkPixelMultiplexer(encoder=encoder_def,
                                      network=distill_policy_def,
                                      latent_dim=self.distill_hidden_dim,
-                                     use_bottleneck=use_bottleneck
+                                     use_bottleneck=use_bottleneck,
+                                     chunk_encoder=action_chunk_def,
                                      )
         print(distill_actor_def)
-        distill_actor_def_init = distill_actor_def.init(distill_actor_key, observations, actions)
+        magic_actions = np.zeros((observations['pixels'].shape[0], 50, 32), dtype=np.float32)
+        distill_actor_def_init = distill_actor_def.init(distill_actor_key, observations, magic_actions)
         distill_actor_params = distill_actor_def_init['params']
         distill_actor_batch_stats = distill_actor_def_init['batch_stats'] if 'batch_stats' in distill_actor_def_init else None
 
@@ -408,9 +412,14 @@ class PixelSACLearner(Agent):
             self.target_entropy = float(target_entropy)
         print(f'target_entropy: {self.target_entropy}')
         print(self.critic_reduction)
+        # count params in how many Millions
+        print('actor params (M): ', count_parameters(self._actor.params)/1e6)
+        print('critic params (M): ', count_parameters(self._critic.params)/1e6)
+        print('distill actor params (M): ', count_parameters(self._distill_actor.params)/1e6)
+        
         
     def update_with_bc(self, batch: FrozenDict) -> Dict[str, float]:
-        new_rng, new_actor, new_distill_actor, new_critic, new_target_critic, new_temp, info = _update_bc_jit(
+        new_rng, new_actor, new_distill_actor, new_critic, new_target_critic, new_temp, info, distill_actor_info = _update_bc_jit(
             self._rng, self._actor, self._distill_actor, self._critic, self._target_critic_params, self._temp, batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, self.aug_next, self.num_cameras, self.kl_coeff
             )
 
@@ -420,7 +429,7 @@ class PixelSACLearner(Agent):
         self._critic = new_critic
         self._target_critic_params = new_target_critic
         self._temp = new_temp
-        return info
+        return info, distill_actor_info
 
     def update(self, batch: FrozenDict) -> Dict[str, float]:
         new_rng, new_actor, new_critic, new_target_critic, new_temp, info = _update_jit(

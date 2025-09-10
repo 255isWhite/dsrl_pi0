@@ -11,51 +11,17 @@ proj_name="CoupleNR_LIBERO"
 #   "qwarmup=1,seed=43"
 # )
 
-gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
+gpu_list=(0 1 2 3)                          # 物理 GPU ID
 ablations=(
-  "label=cnr,task_id=0,kl_coeff=0.1"
-  "label=cnr,task_id=1,kl_coeff=0.1"
-  "label=cnr,task_id=2,kl_coeff=0.1"
-  "label=cnr,task_id=3,kl_coeff=0.1"
-  "label=cnr,task_id=4,kl_coeff=0.1"
-  "label=cnr,task_id=5,kl_coeff=0.1"
-  "label=cnr,task_id=6,kl_coeff=0.1"
-  "label=cnr,task_id=7,kl_coeff=0.1"
-  "label=cnr,task_id=8,kl_coeff=0.1"
-  "label=cnr,task_id=9,kl_coeff=0.1"
+  "label=bc100,task_id=1"
+  "label=bc100,task_id=9"
+  "label=bc100,task_id=4,task_suite=libero_spatial,max_timesteps=400"
+  "label=bc100,task_id=5,task_suite=libero_object,max_timesteps=400"
 
-  "label=cnr,task_id=0,kl_coeff=1.0"
-  "label=cnr,task_id=1,kl_coeff=1.0"
-  "label=cnr,task_id=2,kl_coeff=1.0"
-  "label=cnr,task_id=3,kl_coeff=1.0"
-  "label=cnr,task_id=4,kl_coeff=1.0"
-  "label=cnr,task_id=5,kl_coeff=1.0"
-  "label=cnr,task_id=6,kl_coeff=1.0"
-  "label=cnr,task_id=7,kl_coeff=1.0"
-  "label=cnr,task_id=8,kl_coeff=1.0"
-  "label=cnr,task_id=9,kl_coeff=1.0"
-
-  "label=cnr,task_id=0,kl_coeff=0.0"
-  "label=cnr,task_id=1,kl_coeff=0.0"
-  "label=cnr,task_id=2,kl_coeff=0.0"
-  "label=cnr,task_id=3,kl_coeff=0.0"
-  "label=cnr,task_id=4,kl_coeff=0.0"
-  "label=cnr,task_id=5,kl_coeff=0.0"
-  "label=cnr,task_id=6,kl_coeff=0.0"
-  "label=cnr,task_id=7,kl_coeff=0.0"
-  "label=cnr,task_id=8,kl_coeff=0.0"
-  "label=cnr,task_id=9,kl_coeff=0.0"
-
-  "label=cnr,task_id=0,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=1,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=2,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=3,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=4,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=5,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=6,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=7,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=8,kl_coeff=0.0,res_H=20000"
-  "label=cnr,task_id=9,kl_coeff=0.0,res_H=20000"
+  "label=bc100,task_id=1,action_magnitude=3.0"
+  "label=bc100,task_id=9,action_magnitude=3.0"
+  "label=bc100,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=3.0"
+  "label=bc100,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=3.0"
 )
 
 
@@ -243,7 +209,7 @@ start_task_on_slot() {
     export XLA_PYTHON_CLIENT_MEM_FRACTION=$mem_fraction
 
     exec python3 examples/launch_train_sim.py \
-      --algorithm pixel_sac_residual_2td \
+      --algorithm pixel_sac \
       --env libero \
       --seed 42 \
       --prefix "${tag}_G${gpu_id}" \
@@ -252,7 +218,7 @@ start_task_on_slot() {
       --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
-      --eval_episodes 10 \
+      --eval_episodes 20 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --query_freq 20 \
@@ -262,8 +228,9 @@ start_task_on_slot() {
       --pi0_config pi0_libero40_10-30shot \
       --eval_at_begin 1 \
       --qwarmup 1 \
-      --kl_coeff 1.0 \
+      --kl_coeff 0.0 \
       --res_coeff 0.1 \
+      --use_res 0 \
       --max_timesteps 500 \
       --res_H 60000 \
       $(echo $ablation_args) \

@@ -45,7 +45,7 @@ class ReplayBuffer(Dataset):
         clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         next_actual_norm_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
-        distill_noise_actions = np.empty((self.capacity, *self.action_space.shape), dtype=self.action_space.dtype)
+        distill_noise_actions = np.empty((self.capacity, 50, 32), dtype=self.action_space.dtype)
         distill_clean_actions = np.empty((self.capacity, *self.magic_shape), dtype=self.action_space.dtype)
         rewards = np.empty((self.capacity, ), dtype=np.float32)
         masks = np.empty((self.capacity, ), dtype=np.float32)

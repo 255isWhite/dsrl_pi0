@@ -99,7 +99,7 @@ def update_actor(key: PRNGKey, actor: TrainState, critic: TrainState,
     return new_actor, info
 
 
-def distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', kl_coeff:float=1.0) -> Tuple[TrainState, Dict[str, float]]:
+def update_distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', kl_coeff:float=1.0) -> Tuple[TrainState, Dict[str, float]]:
 
     key, key_act = jax.random.split(key, num=2)
     batch_size = batch['actions'].shape[0]
@@ -127,6 +127,137 @@ def distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cross_nor
             'distill_clean_max': gt_actions.max(),
             'distill_clean_min': gt_actions.min(),
         }
+        
+        batch_actions = batch['actions']
+        repeat_noise = jnp.broadcast_to(batch_actions, (batch_actions.shape[0], 50, batch_actions.shape[2]))
+        if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
+            actions, raws, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': new_model_state['batch_stats']}, batch['observations'], repeat_noise, mutable=['batch_stats'])
+        else:
+            actions, raws = actor.apply_fn({'params': actor_params}, batch['observations'], repeat_noise)
+            new_model_state = {}
+
+        gt_actions = batch['norm_actions'].reshape(batch_size,-1)
+        repeat_actor_loss = (actions.reshape(batch_size,-1) - gt_actions)**2
+        repeat_actor_loss = repeat_actor_loss.mean()
+
+        things_to_log.update({
+            'repeat_actor_loss': repeat_actor_loss,
+            'repeat_distill_noise_mean': repeat_noise.mean(),
+            'repeat_distill_noise_std': repeat_noise.std(),
+            'repeat_distill_noise_max': repeat_noise.max(),
+            'repeat_distill_noise_min': repeat_noise.min(),
+            'repeat_distill_clean_mean': gt_actions.mean(),
+            'repeat_distill_clean_std': gt_actions.std(),
+            'repeat_distill_clean_max': gt_actions.max(),
+            'repeat_distill_clean_min': gt_actions.min(),
+        })
+        
+        actor_loss = actor_loss + repeat_actor_loss
+        
+        things_to_log.update({
+            'total_actor_loss': actor_loss,
+        })
+        
+        return actor_loss, (things_to_log, new_model_state)
+
+    grads, (info, new_model_state) = jax.grad(actor_loss_fn, has_aux=True)(actor.params)
+    
+    if 'batch_stats' in new_model_state:
+        new_actor = actor.apply_gradients(grads=grads, batch_stats=new_model_state['batch_stats'])
+    else:
+        new_actor = actor.apply_gradients(grads=grads)
+
+    return new_actor, info
+
+
+def update_actor_with_bc(key: PRNGKey, actor: TrainState, bc_actor: TrainState, critic: TrainState,
+                 temp: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', kl_coeff:float=1.0) -> Tuple[TrainState, Dict[str, float]]:
+
+    key, key_act = jax.random.split(key, num=2)
+
+    def actor_loss_fn(
+            actor_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
+        if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
+            dist, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['observations'], mutable=['batch_stats'])
+        else:
+            dist, means, log_stds = actor.apply_fn({'params': actor_params}, batch['observations'])
+            new_model_state = {}
+        
+        # For logging only
+        mean_dist = dist.distribution._loc
+        std_diag_dist = dist.distribution._scale_diag
+        mean_dist_norm = jnp.linalg.norm(mean_dist, axis=-1)
+        std_dist_norm = jnp.linalg.norm(std_diag_dist, axis=-1)
+
+        
+        actions, log_probs = dist.sample_and_log_prob(seed=key_act)
+
+        if hasattr(critic, 'batch_stats') and critic.batch_stats is not None:
+            qs, _ = critic.apply_fn({'params': critic.params, 'batch_stats': critic.batch_stats}, batch['observations'],
+                            actions, mutable=['batch_stats'])
+        else:    
+            qs = critic.apply_fn({'params': critic.params}, batch['observations'], actions)
+        
+        if critic_reduction == 'min':
+            q = qs.min(axis=0)
+        elif critic_reduction == 'mean':
+            q = qs.mean(axis=0)
+        else:
+            raise ValueError(f"Invalid critic reduction: {critic_reduction}")
+        actor_loss = (log_probs * temp.apply_fn({'params': temp.params}) - q).mean()
+        
+        # a. KL only MU
+        # kl_loss = jnp.mean(jnp.square(means))
+        
+        # b. KL MU and STD
+        # stds = jnp.exp(log_stds)
+        # kl_loss = 0.5 * jnp.mean(stds**2 + means**2 - 1.0 - 2.0 * log_stds)
+        
+        # c. KL Gaussian
+        tar_norm = actions.shape[-1]
+        ac_norm = jnp.linalg.norm(actions, axis=-1)  # [batch]
+        kl_loss = jnp.mean(0.5 * ac_norm**2 - (tar_norm - 1) * jnp.log(ac_norm + 1e-8))
+        
+        things_to_log = {
+            'actor_loss': actor_loss,
+            'entropy': -log_probs.mean(),
+            'q_pi_in_actor': q.mean(),
+            'mean_pi_norm': mean_dist_norm.mean(),
+            'std_pi_norm': std_dist_norm.mean(),
+            'mean_pi_avg': mean_dist.mean(),
+            'mean_pi_max': mean_dist.max(),
+            'mean_pi_min': mean_dist.min(),
+            'std_pi_avg': std_diag_dist.mean(),
+            'std_pi_max': std_diag_dist.max(),
+            'std_pi_min': std_diag_dist.min(),
+            'mean_pi_batch_mean': mean_dist.mean(axis=0),
+            'std_pi_batch_mean': std_diag_dist.mean(axis=0),
+            # 'mean_pi_ac_mean': mean_dist.mean(axis=-1),
+            # 'std_pi_ac_mean': std_diag_dist.mean(axis=-1),
+            'kl_loss': kl_loss,
+            'ac_norm_avg': ac_norm.mean(),
+            'ac_norm_max': ac_norm.max(),
+            'ac_norm_min': ac_norm.min(),
+            'ac_norm_std': ac_norm.std(),
+            'tar_norm': jnp.sqrt(tar_norm-1),
+        }
+
+        ## calculate behavior cloning loss
+        repeat_actions = jnp.broadcast_to(actions[:, None, :], (actions.shape[0], 50, actions.shape[1]))
+        generated_clean_actions, _ = bc_actor.apply_fn({'params': bc_actor.params}, batch['observations'], repeat_actions)
+        bc_loss = generated_clean_actions.reshape(actions.shape[0], -1) - batch['distill_clean_actions'].reshape(actions.shape[0], -1)
+        bc_loss = (bc_loss**2).mean()
+        
+        things_to_log.update({
+            'bc_loss': bc_loss,
+        })
+
+        actor_loss = actor_loss + bc_loss * 100
+        
+        things_to_log.update({
+            'total_actor_loss': actor_loss,
+        })
+
         return actor_loss, (things_to_log, new_model_state)
 
     grads, (info, new_model_state) = jax.grad(actor_loss_fn, has_aux=True)(actor.params)
