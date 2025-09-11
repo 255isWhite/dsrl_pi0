@@ -58,7 +58,7 @@ if __name__ == '__main__':
         dropout_rate=0.0,
         aug_next=1,
         use_bottleneck=True,
-        encoder_type='small',
+        encoder_type='resnet_small',
         encoder_norm='group',
         use_spatial_softmax=True,
         softmax_temperature=-1,

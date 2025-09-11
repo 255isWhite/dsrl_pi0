@@ -147,6 +147,7 @@ def main(variant):
 
     group_name = variant.prefix + '_' + variant.launch_group_id
     group_name = safe_group_name(group_name, max_len=120)
+    expname = safe_group_name(expname, max_len=120)
     wandb_output_dir = tempfile.mkdtemp()
     wandb_logger = WandBLogger(variant.label != '', variant, variant.wandb_project, experiment_id=expname, output_dir=wandb_output_dir, group_name=group_name)
 

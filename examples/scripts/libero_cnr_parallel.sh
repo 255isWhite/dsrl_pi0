@@ -13,23 +13,25 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=1600_v3,kl_coeff=0.0"
-  "label=1600_v3,kl_coeff=0.1"
-  "label=1600_v3,kl_coeff=0.5"
-  "label=1600_v3,kl_coeff=1.0"
-  "label=1600_v3,kl_coeff=2.0"
-  "label=1600_v3,kl_coeff=5.0"
-  "label=1600_v3,kl_coeff=10.0"
-  "label=1600_v3,kl_coeff=20.0"
+  "label=1600_v4,task_id=9"
+  "label=1600_v4,task_id=1"
+  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400"
+  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400"
 
-  "label=1600_v3,kl_coeff=0.0,task_id=1"
-  "label=1600_v3,kl_coeff=0.1,task_id=1"
-  "label=1600_v3,kl_coeff=0.5,task_id=1"
-  "label=1600_v3,kl_coeff=1.0,task_id=1"
-  "label=1600_v3,kl_coeff=2.0,task_id=1"
-  "label=1600_v3,kl_coeff=5.0,task_id=1"
-  "label=1600_v3,kl_coeff=10.0,task_id=1"
-  "label=1600_v3,kl_coeff=20.0,task_id=1"
+  "label=1600_v4,task_id=9,action_magnitude=1.0"
+  "label=1600_v4,task_id=1,action_magnitude=1.0"
+  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=1.0"
+  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=1.0"
+
+  "label=1600_v4,task_id=9,encoder_type=small"
+  "label=1600_v4,task_id=1,encoder_type=small"
+  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400,encoder_type=small"
+  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400,encoder_type=small"
+
+  "label=1600_v4,task_id=9,action_magnitude=1.0,encoder_type=small"
+  "label=1600_v4,task_id=1,action_magnitude=1.0,encoder_type=small"
+  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=1.0,encoder_type=small"
+  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=1.0,encoder_type=small"
 )
 
 
@@ -226,7 +228,7 @@ start_task_on_slot() {
       --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
-      --eval_episodes 10 \
+      --eval_episodes 20 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --query_freq 20 \
@@ -243,6 +245,7 @@ start_task_on_slot() {
       --q_hidden_dim 256 \
       --use_res 0 \
       --action_magnitude 3.0 \
+      --encoder_type resnet_small \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?
