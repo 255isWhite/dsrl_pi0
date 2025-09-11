@@ -136,8 +136,8 @@ def update_distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cr
             actions, raws = actor.apply_fn({'params': actor_params}, batch['observations'], repeat_noise)
             new_model_state = {}
 
-        gt_actions = batch['norm_actions'].reshape(batch_size,-1)
-        repeat_actor_loss = (actions.reshape(batch_size,-1) - gt_actions)**2
+        repeat_gt_actions = batch['norm_actions'].reshape(batch_size,-1)
+        repeat_actor_loss = (actions.reshape(batch_size,-1) - repeat_gt_actions)**2
         repeat_actor_loss = repeat_actor_loss.mean()
 
         things_to_log.update({
@@ -146,10 +146,10 @@ def update_distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cr
             'repeat_distill_noise_std': repeat_noise.std(),
             'repeat_distill_noise_max': repeat_noise.max(),
             'repeat_distill_noise_min': repeat_noise.min(),
-            'repeat_distill_clean_mean': gt_actions.mean(),
-            'repeat_distill_clean_std': gt_actions.std(),
-            'repeat_distill_clean_max': gt_actions.max(),
-            'repeat_distill_clean_min': gt_actions.min(),
+            'repeat_distill_clean_mean': repeat_gt_actions.mean(),
+            'repeat_distill_clean_std': repeat_gt_actions.std(),
+            'repeat_distill_clean_max': repeat_gt_actions.max(),
+            'repeat_distill_clean_min': repeat_gt_actions.min(),
         })
         
         actor_loss = actor_loss + repeat_actor_loss
