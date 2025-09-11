@@ -196,3 +196,41 @@ class ChunkPixelMultiplexer(nn.Module):
         x = x.copy(add_or_replace={'noise': noise})
         
         return self.network(x, training=training)
+
+
+
+class ChunkActionsPixelMultiplexer(nn.Module):
+    encoder: Union[nn.Module, list]
+    network: nn.Module
+    latent_dim: int
+    use_bottleneck: bool=True
+    chunk_encoder: nn.Module=None
+
+    @nn.compact
+    def __call__(self,
+                 observations: Union[FrozenDict, Dict],
+                 actions: jnp.ndarray,
+                 training: bool = False):
+        observations = FrozenDict(observations)
+        
+        # print all shapes
+        for k,v in observations.items():
+            print(f"obs key: {k}, shape: {v.shape}")
+        print(f"action shape: {actions.shape}")
+
+        x = self.encoder(observations['pixels'], training)
+        if self.use_bottleneck:
+            x = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(x)
+            x = nn.LayerNorm()(x)
+            x = nn.tanh(x)
+        x = observations.copy(add_or_replace={'pixels': x})
+
+        y = observations['state']
+        y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
+        y = nn.LayerNorm()(y)
+        y = nn.tanh(y)
+        x = x.copy(add_or_replace={'state': y})
+        
+        actions = self.chunk_encoder(actions, train=training)
+        
+        return self.network(x, actions, training=training)

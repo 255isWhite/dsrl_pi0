@@ -129,7 +129,7 @@ def update_distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cr
         }
         
         batch_actions = batch['actions']
-        repeat_noise = jnp.broadcast_to(batch_actions, (batch_actions.shape[0], 50, batch_actions.shape[2]))
+        repeat_noise = batch_actions
         if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
             actions, raws, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': new_model_state['batch_stats']}, batch['observations'], repeat_noise, mutable=['batch_stats'])
         else:
@@ -171,7 +171,8 @@ def update_distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cr
 
 
 def update_actor_with_bc(key: PRNGKey, actor: TrainState, bc_actor: TrainState, critic: TrainState,
-                 temp: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', kl_coeff:float=1.0) -> Tuple[TrainState, Dict[str, float]]:
+                temp: TrainState, batch: DatasetDict, cross_norm:bool=False, critic_reduction:str='min', \
+                kl_coeff:float=1.0, bc_coeff:float=0.0) -> Tuple[TrainState, Dict[str, float]]:
 
     key, key_act = jax.random.split(key, num=2)
 
@@ -243,7 +244,7 @@ def update_actor_with_bc(key: PRNGKey, actor: TrainState, bc_actor: TrainState, 
         }
 
         ## calculate behavior cloning loss
-        repeat_actions = jnp.broadcast_to(actions[:, None, :], (actions.shape[0], 50, actions.shape[1]))
+        repeat_actions = actions
         generated_clean_actions, _ = bc_actor.apply_fn({'params': bc_actor.params}, batch['observations'], repeat_actions)
         bc_loss = generated_clean_actions.reshape(actions.shape[0], -1) - batch['distill_clean_actions'].reshape(actions.shape[0], -1)
         bc_loss = (bc_loss**2).mean()
@@ -252,7 +253,7 @@ def update_actor_with_bc(key: PRNGKey, actor: TrainState, bc_actor: TrainState, 
             'bc_loss': bc_loss,
         })
 
-        actor_loss = actor_loss + bc_loss * 100
+        actor_loss = actor_loss + bc_loss * bc_coeff
         
         things_to_log.update({
             'total_actor_loss': actor_loss,

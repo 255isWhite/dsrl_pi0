@@ -25,7 +25,7 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --log_interval 500 \
 --eval_episodes 1 \
 --multi_grad_step 20 \
---start_online_updates 2 \
+--start_online_updates 20 \
 --resize_image 64 \
 --action_magnitude 1.0 \
 --query_freq 20 \
@@ -34,10 +34,11 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --task_suite libero_90 \
 --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
 --pi0_config pi0_libero40_10-30shot \
---eval_at_begin 0 \
+--eval_at_begin 1 \
 --kl_coeff 1.0 \
 --qwarmup 0 \
 --max_timesteps 40 \
 --use_res 0 \
 --label test_distill \
 --action_magnitude 3.0 \
+--bc_coeff 1.0 \

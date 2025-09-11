@@ -13,15 +13,15 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3)                          # 物理 GPU ID
 ablations=(
-  "label=bc100,task_id=1"
-  "label=bc100,task_id=9"
-  "label=bc100,task_id=4,task_suite=libero_spatial,max_timesteps=400"
-  "label=bc100,task_id=5,task_suite=libero_object,max_timesteps=400"
+  "label=bc_full,task_id=1"
+  "label=bc_full,task_id=9"
+  "label=bc_full,task_id=4,task_suite=libero_spatial,max_timesteps=400"
+  "label=bc_full,task_id=5,task_suite=libero_object,max_timesteps=400"
 
-  "label=bc100,task_id=1,action_magnitude=3.0"
-  "label=bc100,task_id=9,action_magnitude=3.0"
-  "label=bc100,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=3.0"
-  "label=bc100,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=3.0"
+  "label=bc_full,task_id=1,action_magnitude=3.0"
+  "label=bc_full,task_id=9,action_magnitude=3.0"
+  "label=bc_full,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=3.0"
+  "label=bc_full,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=3.0"
 )
 
 

@@ -20,7 +20,7 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer, ChunkActionsPixelMultiplexer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
@@ -92,7 +92,8 @@ def _update_bc_jit(
     rng: PRNGKey, actor: TrainState, distill_actor: TrainState, critic: TrainState,
     target_critic_params: Params, temp: TrainState, batch: TrainState,
     discount: float, tau: float, target_entropy: float,
-    critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int, kl_coeff: float
+    critic_reduction: str, color_jitter: bool, aug_next: bool, num_cameras: int, \
+    kl_coeff: float, bc_coeff: float
 ) -> Tuple[PRNGKey, TrainState, TrainState, Params, TrainState, Dict[str,float]]:
     aug_pixels = batch['observations']['pixels']
     aug_next_pixels = batch['next_observations']['pixels']
@@ -132,7 +133,7 @@ def _update_bc_jit(
     new_target_critic_params = soft_target_update(new_critic.params, target_critic_params, tau)
     
     key, rng = jax.random.split(rng)
-    new_actor, actor_info = update_actor_with_bc(key, actor, distill_actor, new_critic, temp, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff)
+    new_actor, actor_info = update_actor_with_bc(key, actor, distill_actor, new_critic, temp, batch, critic_reduction=critic_reduction, kl_coeff=kl_coeff, bc_coeff=bc_coeff)
     new_temp, alpha_info = update_temperature(temp, actor_info['entropy'], target_entropy)
 
     key, rng = jax.random.split(rng)
@@ -285,6 +286,7 @@ class PixelSACLearner(Agent):
                  chunk_len: int = 20,
                  distill_action_dim: int = 7,
                  distill_hidden_dim: int = 128,
+                 bc_coeff: float = 0.0,
                  ):
         """
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
@@ -305,6 +307,7 @@ class PixelSACLearner(Agent):
         self.chunk_len = chunk_len
         self.distill_action_dim = distill_action_dim
         self.distill_hidden_dim = distill_hidden_dim
+        self.bc_coeff = bc_coeff
 
         rng = jax.random.PRNGKey(seed)
         rng, actor_key, critic_key, temp_key, distill_actor_key = jax.random.split(rng, 5)
@@ -355,11 +358,13 @@ class PixelSACLearner(Agent):
                                   tx=optax.adam(learning_rate=actor_lr),
                                   batch_stats=actor_batch_stats)
 
+        action_chunk_def = ActionChunkEncoder(out_dim=self.distill_hidden_dim)
         critic_def = StateActionEnsemble(hidden_dims, num_qs=num_qs)
-        critic_def = PixelMultiplexer(encoder=encoder_def,
+        critic_def = ChunkActionsPixelMultiplexer(encoder=encoder_def,
                                       network=critic_def,
-                                      latent_dim=latent_dim,
-                                      use_bottleneck=use_bottleneck
+                                      latent_dim=self.distill_hidden_dim,
+                                      use_bottleneck=use_bottleneck,
+                                      chunk_encoder=action_chunk_def,
                                       )
         print(critic_def)
         critic_def_init = critic_def.init(critic_key, observations, actions)
@@ -380,7 +385,7 @@ class PixelSACLearner(Agent):
                                  params=temp_params,
                                  tx=optax.adam(learning_rate=temp_lr),
                                  batch_stats=None)
-        action_chunk_def = ActionChunkEncoder(out_dim=self.distill_hidden_dim)
+        
         # residual head part
         distill_policy_def = DeterministicPolicy(hidden_dims, 20 * 7, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
         distill_actor_def = ChunkPixelMultiplexer(encoder=encoder_def,
@@ -420,7 +425,9 @@ class PixelSACLearner(Agent):
         
     def update_with_bc(self, batch: FrozenDict) -> Dict[str, float]:
         new_rng, new_actor, new_distill_actor, new_critic, new_target_critic, new_temp, info, distill_actor_info = _update_bc_jit(
-            self._rng, self._actor, self._distill_actor, self._critic, self._target_critic_params, self._temp, batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, self.color_jitter, self.aug_next, self.num_cameras, self.kl_coeff
+            self._rng, self._actor, self._distill_actor, self._critic, self._target_critic_params, \
+            self._temp, batch, self.discount, self.tau, self.target_entropy, self.critic_reduction, \
+            self.color_jitter, self.aug_next, self.num_cameras, self.kl_coeff, self.bc_coeff
             )
 
         self._rng = new_rng
