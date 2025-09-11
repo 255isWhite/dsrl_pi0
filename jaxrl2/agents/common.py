@@ -93,9 +93,9 @@ def sample_actions_jit(
     input_collections = {'params': actor_params}
     if actor_batch_stats is not None:
         input_collections['batch_stats'] = actor_batch_stats
-    dist, means, log_stds = actor_apply_fn(input_collections, observations)
+    actions = actor_apply_fn(input_collections, observations)
     rng, key = jax.random.split(rng)
-    return rng, dist.sample(seed=key)
+    return rng, actions
 
 @partial(jax.jit, static_argnames='actor_apply_fn')
 def sample_deterministic_actions_jit(

@@ -20,7 +20,7 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, LargePixelMultiplexer, CrossAttnTransformer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
@@ -380,18 +380,17 @@ class PixelSACLearner(Agent):
                                  params=temp_params,
                                  tx=optax.adam(learning_rate=temp_lr),
                                  batch_stats=None)
-        action_chunk_def = ActionChunkEncoder(out_dim=self.distill_hidden_dim)
+        # action_chunk_def = ActionChunkEncoder(out_dim=self.distill_hidden_dim)
         # residual head part
-        distill_policy_def = DeterministicPolicy(hidden_dims, 20 * 7, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
-        distill_actor_def = ChunkPixelMultiplexer(encoder=encoder_def,
+        distill_policy_def = CrossAttnTransformer(hidden_dim=self.distill_hidden_dim)
+        distill_actor_def = LargePixelMultiplexer(encoder=encoder_def,
                                      network=distill_policy_def,
                                      latent_dim=self.distill_hidden_dim,
-                                     use_bottleneck=use_bottleneck,
-                                     chunk_encoder=action_chunk_def,
+                                     use_bottleneck=use_bottleneck
                                      )
         print(distill_actor_def)
         magic_actions = np.zeros((observations['pixels'].shape[0], 50, 32), dtype=np.float32)
-        distill_actor_def_init = distill_actor_def.init(distill_actor_key, observations, magic_actions)
+        distill_actor_def_init = distill_actor_def.init(distill_actor_key, observations)
         distill_actor_params = distill_actor_def_init['params']
         distill_actor_batch_stats = distill_actor_def_init['batch_stats'] if 'batch_stats' in distill_actor_def_init else None
 

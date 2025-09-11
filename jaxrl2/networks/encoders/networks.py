@@ -4,7 +4,7 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 from flax.core.frozen_dict import FrozenDict
-
+import numpy as np
 from jaxrl2.networks.constants import default_init, xavier_init, kaiming_init
 
 from functools import partial
@@ -64,58 +64,28 @@ class PixelMultiplexer(nn.Module):
             return self.network(x, actions, training=training)
 
 
-class LargePixelMultiplexer(nn.Module):
-    encoder: Union[nn.Module, list]
-    network: nn.Module
-    latent_dim: int
-    use_bottleneck: bool=True
+def _flatten_dict(x: Union[FrozenDict, jnp.ndarray]):
+    if hasattr(x, 'values'):
+        obs = []
+        for k, v in sorted(x.items()):
+            # if k == "actions":
+            #     v = v[:, 0:1, ...]
+            if k == 'state': # flatten action chunk to 1D
+                obs.append(jnp.reshape(v, [*v.shape[:-2], np.prod(v.shape[-2:])]))
+                # v = jnp.reshape(v, [*v.shape[:-2], np.prod(v.shape[-2:])])
+            elif k == 'prev_action' or k == 'actions' or k == 'noise':
+                if v.ndim > 2:
+                    # deal with action chunk
+                    obs.append(jnp.reshape(v, [*v.shape[:-2], np.prod(v.shape[-2:])]))
+                else:
+                    obs.append(v)
+            else:
+                obs.append(_flatten_dict(v))
+        return jnp.concatenate(obs, -1)
+    else:
+        return x
+    
 
-    @nn.compact
-    def __call__(self,
-                 observations: Union[FrozenDict, Dict],
-                 noise: Optional[jnp.ndarray] = None,
-                 actions: Optional[jnp.ndarray] = None,
-                 training: bool = False):
-        observations = FrozenDict(observations)
-        
-        # # print _shape
-        # for k, v in observations.items():
-        #     print (k, v.shape)
-        # if actions is not None:
-        #     print ('action shape: ', actions.shape)
-        # if noise is not None:
-        #     print ('noise shape: ', noise.shape)
-
-        x = self.encoder(observations['pixels'], training)
-        if self.use_bottleneck:
-            x = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(x)
-            x = nn.LayerNorm()(x)
-            x = nn.tanh(x)
-        x = observations.copy(add_or_replace={'pixels': x})
-
-        y = observations['state']
-        y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
-        y = nn.LayerNorm()(y)
-        y = nn.tanh(y)
-        x = x.copy(add_or_replace={'state': y})
-        
-        if noise is not None:
-            noise = nn.Dense(self.latent_dim, kernel_init=xavier_init())(noise)
-            noise = nn.LayerNorm()(noise)
-            noise = nn.tanh(noise)
-            x = x.copy(add_or_replace={'noise': noise})
-        
-        if actions is not None:
-            actions = nn.Dense(self.latent_dim, kernel_init=xavier_init())(actions)
-            actions = nn.LayerNorm()(actions)
-            actions = nn.tanh(actions)
-
-        # print('fully connected keys', x.keys())
-        if actions is None:
-            return self.network(x, training=training)
-        else:
-            return self.network(x, actions, training=training)
-        
 
 class ActionChunkEncoder(nn.Module):
     hidden_dim: int = 128
@@ -196,3 +166,113 @@ class ChunkPixelMultiplexer(nn.Module):
         x = x.copy(add_or_replace={'noise': noise})
         
         return self.network(x, training=training)
+
+import flax.linen as nn
+
+class LargePixelMultiplexer(nn.Module):
+    encoder: Union[nn.Module, list]
+    network: nn.Module
+    latent_dim: int
+    use_bottleneck: bool=True
+
+    @nn.compact
+    def __call__(self,
+                 observations: Union[FrozenDict, Dict],
+                 training: bool = False):
+        observations = FrozenDict(observations)
+        
+        # # print _shape
+        # for k, v in observations.items():
+        #     print (k, v.shape)
+        # if actions is not None:
+        #     print ('action shape: ', actions.shape)
+        # if noise is not None:
+        #     print ('noise shape: ', noise.shape)
+
+        x = self.encoder(observations['pixels'], training)
+        if self.use_bottleneck:
+            x = nn.Dense(self.latent_dim, kernel_init=xavier_init())(x)
+            x = nn.LayerNorm()(x)
+            x = nn.tanh(x)
+        print(f"post-encoder flattened shape: {x.shape}")
+
+        y = observations['state'].reshape(observations['state'].shape[0], -1)
+        # y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
+        # y = nn.LayerNorm()(y)
+        # y = nn.tanh(y)
+        print(f"post-state flattened shape: {y.shape}")
+
+        x = jnp.concatenate([x, y], axis=-1)        
+
+        print(f"final flattened shape: {x.shape}")
+        
+        return self.network(x, training=training)
+    
+    
+class CrossAttentionBlock(nn.Module):
+    hidden_dim: int
+    num_heads: int
+    dropout_rate: float = 0.1
+
+    @nn.compact
+    def __call__(self, x, cond, training: bool = False):
+        """
+        x: (B, T, hidden_dim)  -> 动作序列 token
+        cond: (B, D_cond)      -> 图像/状态条件 latent
+        """
+        # 把 cond 变成序列 token (B, 1, hidden_dim)
+        cond = nn.Dense(self.hidden_dim)(cond)[:, None, :]
+
+        # LayerNorm + CrossAttention
+        residual = x
+        x = nn.LayerNorm()(x)
+        x = nn.MultiHeadDotProductAttention(
+            num_heads=self.num_heads,
+            dropout_rate=self.dropout_rate,
+            deterministic=not training
+        )(x, cond)   # Q = x, K/V = cond
+        x = residual + x
+
+        # FFN
+        residual = x
+        x = nn.LayerNorm()(x)
+        x = nn.Dense(self.hidden_dim * 4)(x)
+        x = nn.gelu(x)
+        x = nn.Dense(self.hidden_dim)(x)
+        return residual + x
+
+
+class CrossAttnTransformer(nn.Module):
+    seq_len: int = 50
+    action_dim: int = 32
+    hidden_dim: int = 256
+    num_layers: int = 2
+    num_heads: int = 4
+    dropout_rate: float = 0.1
+
+    @nn.compact
+    def __call__(self, cond_embed, training: bool = False):
+        """
+        cond_embed: (B, D_cond)  已经是图像+state latent
+        返回: (B, seq_len, action_dim)
+        """
+        B, D = cond_embed.shape
+
+        # 初始化动作序列 token (learned query)
+        action_tokens = self.param(
+            "action_tokens", nn.initializers.normal(stddev=0.02),
+            (1, self.seq_len, self.hidden_dim)
+        )
+        x = jnp.tile(action_tokens, (B, 1, 1))  # (B, T, hidden_dim)
+
+        # 堆叠 Cross-Attention Block
+        for _ in range(self.num_layers):
+            x = CrossAttentionBlock(
+                hidden_dim=self.hidden_dim,
+                num_heads=self.num_heads,
+                dropout_rate=self.dropout_rate
+            )(x, cond_embed, training=training)
+
+        # 投影到动作维度
+        actions = nn.Dense(self.action_dim)(x)  # (B, T, action_dim)
+        return actions

@@ -106,56 +106,18 @@ def update_distill_actor(key: PRNGKey, actor: TrainState, batch: DatasetDict, cr
 
     def actor_loss_fn(
             actor_params: Params) -> Tuple[jnp.ndarray, Dict[str, float]]:
+        things_to_log = {}
+
         if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
-            actions, raws, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': actor.batch_stats}, batch['observations'], batch['distill_noise_actions'], mutable=['batch_stats'])
+            actions, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': new_model_state['batch_stats']}, batch['observations'], mutable=['batch_stats'])
         else:
-            actions, raws = actor.apply_fn({'params': actor_params}, batch['observations'], batch['distill_noise_actions'])
+            actions = actor.apply_fn({'params': actor_params}, batch['observations'])
             new_model_state = {}
+        # print(f"shape of actions {actions.shape}, shape of batch actions {batch['actions'].shape}")
+        actor_loss = ((actions - batch['actions']) ** 2).mean()
 
-        gt_actions = batch['distill_clean_actions'].reshape(batch_size,-1)
-        actor_loss = (actions.reshape(batch_size,-1) - gt_actions)**2
-        actor_loss = actor_loss.mean()
-
-        things_to_log = {
+        things_to_log.update({
             'actor_loss': actor_loss,
-            'distill_noise_mean': batch['distill_noise_actions'].mean(),
-            'distill_noise_std': batch['distill_noise_actions'].std(),
-            'distill_noise_max': batch['distill_noise_actions'].max(),
-            'distill_noise_min': batch['distill_noise_actions'].min(),
-            'distill_clean_mean': gt_actions.mean(),
-            'distill_clean_std': gt_actions.std(),
-            'distill_clean_max': gt_actions.max(),
-            'distill_clean_min': gt_actions.min(),
-        }
-        
-        batch_actions = batch['actions']
-        repeat_noise = jnp.broadcast_to(batch_actions, (batch_actions.shape[0], 50, batch_actions.shape[2]))
-        if hasattr(actor, 'batch_stats') and actor.batch_stats is not None:
-            actions, raws, new_model_state = actor.apply_fn({'params': actor_params, 'batch_stats': new_model_state['batch_stats']}, batch['observations'], repeat_noise, mutable=['batch_stats'])
-        else:
-            actions, raws = actor.apply_fn({'params': actor_params}, batch['observations'], repeat_noise)
-            new_model_state = {}
-
-        repeat_gt_actions = batch['norm_actions'].reshape(batch_size,-1)
-        repeat_actor_loss = (actions.reshape(batch_size,-1) - repeat_gt_actions)**2
-        repeat_actor_loss = repeat_actor_loss.mean()
-
-        things_to_log.update({
-            'repeat_actor_loss': repeat_actor_loss,
-            'repeat_distill_noise_mean': repeat_noise.mean(),
-            'repeat_distill_noise_std': repeat_noise.std(),
-            'repeat_distill_noise_max': repeat_noise.max(),
-            'repeat_distill_noise_min': repeat_noise.min(),
-            'repeat_distill_clean_mean': repeat_gt_actions.mean(),
-            'repeat_distill_clean_std': repeat_gt_actions.std(),
-            'repeat_distill_clean_max': repeat_gt_actions.max(),
-            'repeat_distill_clean_min': repeat_gt_actions.min(),
-        })
-        
-        actor_loss = actor_loss + repeat_actor_loss
-        
-        things_to_log.update({
-            'total_actor_loss': actor_loss,
         })
         
         return actor_loss, (things_to_log, new_model_state)

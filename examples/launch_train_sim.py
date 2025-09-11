@@ -20,6 +20,8 @@ if __name__ == '__main__':
     parser.add_argument('--add_states', default=1, help='whether to add low-dim states to the obervations', type=int)
     parser.add_argument('--wandb_project', default='cql_sim_online', help='wandb project')
     parser.add_argument('--start_online_updates', default=1000, help='number of steps to collect before starting online updates', type=int)
+    parser.add_argument('--start_warmup_size', default=20, help='number of steps to collect before starting warmup', type=int)
+    parser.add_argument('--num_online_gradsteps_batch', default=-1, help='number of gradient steps to take per online batch', type=int)
     parser.add_argument('--algorithm', default='pixel_sac', help='type of algorithm')
     parser.add_argument('--prefix', default='', help='prefix to use for wandb')
     parser.add_argument('--suffix', default='', help='suffix to use for wandb')
@@ -41,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--label', default='', help='label for wandb run', type=str)
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
-    parser.add_argument('--distill_hidden_dim', default=128, help='hidden dim for residual policy and Q', type=int)
+    parser.add_argument('--distill_hidden_dim', default=256, help='hidden dim for residual policy and Q', type=int)
     
     train_args_dict = dict(
         actor_lr=1e-4,
