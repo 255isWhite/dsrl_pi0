@@ -110,7 +110,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
             else:
                 res_prob = (i-warmup_steps)/ variant.res_H if i <= (variant.res_H + warmup_steps) else 1.0
                 use_random = False
-            traj = collect_traj(variant, agent, env, i, agent_dp, res_prob, dp_unnorm_transform, use_random)
+            traj = collect_traj(variant, agent, env, i, agent_dp, res_prob, dp_unnorm_transform, use_random, replay_buffer)
             traj_id = online_replay_buffer._traj_counter
             add_online_data_to_buffer(variant, traj, online_replay_buffer)
             total_env_steps += traj['env_steps']
@@ -121,6 +121,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                 'replay_buffer_size': len(online_replay_buffer),
                 'episode_return (exploration)': traj['episode_return'],
                 'is_success (exploration)': int(traj['is_success']),
+                'episode_len (exploration)': traj['ep_len'],
                 'residual/res_prob': res_prob,
             }, i)
             
@@ -133,9 +134,9 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
             if i == 0 and eval_at_begin:
                 print('performing evaluation for initial checkpoint')
                 if perform_control_evals:
-                    perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_random)
-                if hasattr(agent, 'perform_eval'):
-                    agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
+                    perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_random, replay_buffer)
+                # if hasattr(agent, 'perform_eval'):
+                #     agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
             if True:
                 for _ in range(num_gradsteps):
@@ -147,21 +148,26 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                     if len(online_replay_buffer) <= variant.start_online_updates:
                         if variant.qwarmup:
                             if variant.use_res:
-                                update_info, res_update_info = agent.update_wo_actor(batch, res_prob)
-                            else:
-                                update_info = agent.update_wo_actor(batch)
+                                update_info = {}
+                                distill_info = {}
                                 res_update_info = {}
-                                distill_info = agent.distill(batch)
+                            else:
+                                update_info = {}
+                                distill_info = {}
+                                res_update_info = {}
                         else:
-                            update_info = {}
-                            res_update_info = {}
+                                update_info = {}
+                                distill_info = {}
+                                res_update_info = {}
                     else:
                         if variant.use_res:
-                            update_info, res_update_info = agent.update(batch, res_prob)
+                                update_info = {}
+                                distill_info = {}
+                                res_update_info = {}
                         else:
-                            # update_info = agent.update(batch)
-                            res_update_info = {}               
-                            update_info, distill_info = agent.update_with_bc(batch)                             
+                                update_info = {}
+                                distill_info = {}
+                                res_update_info = {}                         
 
                     pbar.update()
                     i += 1
@@ -200,9 +206,9 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                         wandb_logger.log({'env_steps': total_env_steps}, step=i)
                         if i % variant.media_log_interval == 0:
                             if perform_control_evals:
-                                perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_random)
-                            if hasattr(agent, 'perform_eval'):
-                                agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
+                                perform_control_eval(agent, eval_env, i, variant, wandb_logger, agent_dp, res_prob, dp_unnorm_transform, use_random, replay_buffer)
+                            # if hasattr(agent, 'perform_eval'):
+                            #     agent.perform_eval(variant, i, wandb_logger, replay_buffer, replay_buffer_iterator, eval_env)
 
                     if variant.checkpoint_interval != -1 and i % variant.checkpoint_interval == 0 and i > 0:
                         agent.save_checkpoint(variant.outputdir, i, variant.checkpoint_interval)
@@ -251,7 +257,7 @@ def add_online_data_to_buffer(variant, traj, online_replay_buffer):
         online_replay_buffer.insert(insert_dict)
     online_replay_buffer.increment_traj_counter()
 
-def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_random=False):
+def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_random=False, replay_buffer=None):
     query_frequency = variant.query_freq
     max_timesteps = variant.max_timesteps
     env_max_reward = variant.env_max_reward
@@ -275,6 +281,14 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
     distill_noise_list = []
     distill_clean_list = []
 
+    succ_noise_seq = None
+    succ_noise_count = -1
+    if len(replay_buffer._success_buffer) > 0:
+        print('Using successful trajectories ---')
+        succ_noise_seq = replay_buffer._success_buffer[-1]
+        succ_noise_count = succ_noise_seq.shape[0]
+    
+    ep_len = 0
     for t in tqdm(range(max_timesteps)):
         curr_image = obs_to_img(obs, variant)
         
@@ -296,16 +310,28 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             # we then use the noise to sample the action from diffusion model
             rng, key = jax.random.split(rng)
             obs_pi_zero = obs_to_pi_zero_input(obs, variant)
-            if use_random:
+            if True:
                 # for initial round of data collection, we sample from standard gaussian noise
-                noise = jax.random.normal(key, (1, *agent.action_chunk_shape))
-
+                noise = jax.random.normal(rng, (1, 50, 32))
                 actions_noise = noise[0] # squeeze batch dim
             else:
                 # sac agent predicts the noise for diffusion model
                 actions_noise = agent.sample_actions(obs_dict)
                 actions_noise = np.reshape(actions_noise, agent.action_chunk_shape)
                 noise = actions_noise[None] # add batch dim
+                
+            # if succ_noise_list is not None:
+            #     # we use succ noise
+            #     noise = succ_noise_list[np.random.randint(0, len(succ_noise_list))]
+            
+            if succ_noise_count > 0:
+                print(f'succ noise remains: {succ_noise_count}')
+                noise = succ_noise_seq[len(succ_noise_seq) - succ_noise_count][None]
+                actions_noise = noise[0]
+                succ_noise_count -= 1
+            else:
+                print('Gaussian random noise generated')
+
 
             action_dict = agent_dp.infer(obs_pi_zero, noise=noise)
             
@@ -339,6 +365,7 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
             
         rewards.append(reward)
         image_list.append(curr_image)
+        ep_len = t + 1
         if done:
             break
 
@@ -385,9 +412,10 @@ def collect_traj(variant, agent, env, i, agent_dp=None, res_prob=0.0, dp_unnorm_
         'env_steps': t + 1,
         'distill_noise': distill_noise_list,
         'distill_clean': distill_clean_list,
+        'ep_len': ep_len,
     }
 
-def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_random=False):
+def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, res_prob=0.0, dp_unnorm_transform=None, use_random=False, replay_buffer=None):
     query_frequency = variant.query_freq
     print('query frequency', query_frequency)
     max_timesteps = variant.max_timesteps
@@ -433,7 +461,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
                 obs_pi_zero = obs_to_pi_zero_input(obs, variant)
                 
                 
-                if use_random:
+                if True:
                     # for initial evaluation, we sample from standard gaussian noise to evaluate the base policy's performance
                     noise = jax.random.normal(rng, (1, 50, 32))
                 else:
@@ -483,6 +511,7 @@ def perform_control_eval(agent, env, i, variant, wandb_logger, agent_dp=None, re
     wandb_logger.log({'evaluation/avg_return': avg_return}, step=i)
     wandb_logger.log({'evaluation/success_rate': success_rate}, step=i)
     wandb_logger.log({'evaluation/avg_episode_len': avg_episode_len}, step=i)
+    wandb_logger.log({'evaluation/avg_succ_episode_len': np.mean(np.array(episode_lens)[np.array(success_rates)==1])}, step=i)
     for r in range(env_max_reward+1):
         more_or_equal_r = (np.array(highest_rewards) >= r).sum()
         more_or_equal_r_rate = more_or_equal_r / variant.eval_episodes

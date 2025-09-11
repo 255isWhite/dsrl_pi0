@@ -73,6 +73,7 @@ class ReplayBuffer(Dataset):
         self._start = 0
         self.traj_bounds = dict()
         self.streaming_buffer_size = None # this is for streaming the online data
+        self._success_buffer = []
 
     def __len__(self) -> int:
         return self.size
@@ -82,6 +83,14 @@ class ReplayBuffer(Dataset):
 
     def increment_traj_counter(self):
         self.traj_bounds[self._traj_counter] = (self._start, self.size) # [start, end)
+        
+        if self.data['rewards'][self.size - 1] > -0.5:
+            last_success_len = self._success_buffer[-1].shape[0] if len(self._success_buffer) > 0 else 0
+            current_traj_len = self.size - self._start
+            if current_traj_len > last_success_len:
+                self._success_buffer.append(self.data['actions'][self._start:self.size])
+                assert self.data['actions'][self._start:self.size].shape[0] > 1
+        
         self._start = self.size
         self._traj_counter += 1
 
