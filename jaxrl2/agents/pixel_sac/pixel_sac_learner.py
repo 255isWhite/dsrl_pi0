@@ -20,7 +20,7 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer, LargePixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer, LargePixelMultiplexer, TransformerPixelMultiplexer
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
@@ -189,7 +189,7 @@ class PixelSACLearner(Agent):
                  discount: float = 0.99,
                  tau: float = 0.005,
                  critic_reduction: str = 'mean',
-                 dropout_rate: Optional[float] = 0.1,
+                 dropout_rate: Optional[float] = None,
                  encoder_type='resnet_34_v1',
                  encoder_norm='group',
                  color_jitter = True,
@@ -255,6 +255,13 @@ class PixelSACLearner(Agent):
 
         if len(hidden_dims) == 1:
             hidden_dims = (hidden_dims[0], hidden_dims[0], hidden_dims[0])
+        
+        # policy_def = LearnedStdTanhNormalPolicy(hidden_dims, self.action_dim, dropout_rate=dropout_rate, low=-action_magnitude, high=action_magnitude)
+        # actor_def = PixelMultiplexer(encoder=encoder_def,
+        #                              network=policy_def,
+        #                              latent_dim=latent_dim,
+        #                              use_bottleneck=use_bottleneck
+        #                              )
 
         policy_def = ChunkGaussianPolicy(dropout_rate=dropout_rate, low=-action_magnitude, high=action_magnitude, hidden_dim=self.q_hidden_dim)
         actor_def = LargePixelMultiplexer(encoder=encoder_def,
@@ -273,11 +280,20 @@ class PixelSACLearner(Agent):
                                   batch_stats=actor_batch_stats)
 
         critic_def = StateValueEnsemble(hidden_dims, num_vs=num_qs)
-        critic_def = ChunkPixelMultiplexer(encoder=encoder_def,
+        critic_def = TransformerPixelMultiplexer(encoder=encoder_def,
                                       network=critic_def,
                                       latent_dim=self.q_hidden_dim,
                                       use_bottleneck=use_bottleneck,
                                       )
+        
+        # critic_def = StateActionEnsemble(hidden_dims, num_qs=num_qs)
+        # action_chunk_def = ActionChunkEncoder(out_dim=self.q_hidden_dim)
+        # critic_def = ChunkPixelMultiplexer(encoder=encoder_def,
+        #                               network=critic_def,
+        #                               latent_dim=self.q_hidden_dim,
+        #                               use_bottleneck=use_bottleneck,
+        #                               chunk_encoder=action_chunk_def,
+        #                               )
         print(critic_def)
         critic_def_init = critic_def.init(critic_key, observations, actions)
         self._critic_init_params = critic_def_init['params']

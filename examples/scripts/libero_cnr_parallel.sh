@@ -11,27 +11,27 @@ proj_name="CoupleNR_LIBERO"
 #   "qwarmup=1,seed=43"
 # )
 
-gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
+gpu_list=(4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=1600_v4,task_id=9"
-  "label=1600_v4,task_id=1"
-  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400"
-  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400"
+  "label=1600_raw,task_id=9"
+  "label=1600_raw,task_id=1"
+  # "label=1600_raw,task_id=4,task_suite=libero_spatial,max_timesteps=400"
+  # "label=1600_raw,task_id=5,task_suite=libero_object,max_timesteps=400"
 
-  "label=1600_v4,task_id=9,action_magnitude=1.0"
-  "label=1600_v4,task_id=1,action_magnitude=1.0"
-  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=1.0"
-  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=1.0"
+  # "label=1600_raw,task_id=9,action_magnitude=1.0"
+  # "label=1600_raw,task_id=1,action_magnitude=1.0"
+  # "label=1600_raw,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=1.0"
+  # "label=1600_raw,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=1.0"
 
-  "label=1600_v4,task_id=9,encoder_type=small"
-  "label=1600_v4,task_id=1,encoder_type=small"
-  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400,encoder_type=small"
-  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400,encoder_type=small"
+  "label=1600_raw,task_id=9,encoder_type=small"
+  "label=1600_raw,task_id=1,encoder_type=small"
+  # "label=1600_raw,task_id=4,task_suite=libero_spatial,max_timesteps=400,encoder_type=small"
+  # "label=1600_raw,task_id=5,task_suite=libero_object,max_timesteps=400,encoder_type=small"
 
-  "label=1600_v4,task_id=9,action_magnitude=1.0,encoder_type=small"
-  "label=1600_v4,task_id=1,action_magnitude=1.0,encoder_type=small"
-  "label=1600_v4,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=1.0,encoder_type=small"
-  "label=1600_v4,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=1.0,encoder_type=small"
+  # "label=1600_raw,task_id=9,action_magnitude=1.0,encoder_type=small"
+  # "label=1600_raw,task_id=1,action_magnitude=1.0,encoder_type=small"
+  # "label=1600_raw,task_id=4,task_suite=libero_spatial,max_timesteps=400,action_magnitude=1.0,encoder_type=small"
+  # "label=1600_raw,task_id=5,task_suite=libero_object,max_timesteps=400,action_magnitude=1.0,encoder_type=small"
 )
 
 
@@ -226,9 +226,9 @@ start_task_on_slot() {
       --wandb_project ${proj_name} \
       --batch_size 256 \
       --max_steps 500000 \
-      --eval_interval 10000 \
+      --eval_interval 100000 \
       --log_interval 500 \
-      --eval_episodes 20 \
+      --eval_episodes 1 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --query_freq 20 \
@@ -236,7 +236,7 @@ start_task_on_slot() {
       --task_suite libero_10 \
       --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
       --pi0_config pi0_libero40_10-30shot \
-      --eval_at_begin 1 \
+      --eval_at_begin 0 \
       --qwarmup 0 \
       --kl_coeff 0.0 \
       --res_coeff 0.1 \

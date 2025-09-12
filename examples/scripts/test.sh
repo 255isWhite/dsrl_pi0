@@ -39,4 +39,3 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --max_timesteps 200 \
 --use_res 0 \
 --label test \
---hidden_dims 128 \

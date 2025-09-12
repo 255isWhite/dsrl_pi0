@@ -76,15 +76,17 @@ class ChunkGaussianPolicy(nn.Module):
             dropout_rate=self.dropout_rate,
         )(cond_embed, training=training)  # (B, 50, hidden_dim)
 
-        # 2. 展平序列
-        x = x.reshape(x.shape[0], -1)  # (B, 50*hidden_dim)
-
-        # 3. 输出 mean & log_std
-        means = nn.Dense(self.seq_len * self.action_dim)(x)      # (B, 1600)
-        log_stds = nn.Dense(self.seq_len * self.action_dim)(x)   # (B, 1600)
+        means = nn.Dense(self.action_dim)(x).reshape(x.shape[0], -1) # (B, 50* 32)
+        log_stds = nn.Dense(self.action_dim)(x).reshape(x.shape[0], -1) # (B, 50* 32)
+        
+        # # 2. 展平序列
+        # x = x.reshape(x.shape[0], -1)  # (B, 50*hidden_dim)
+        # # 3. 输出 mean & log_std
+        # means = nn.Dense(self.seq_len * self.action_dim)(x)      # (B, 1600)
+        # log_stds = nn.Dense(self.seq_len * self.action_dim)(x)   # (B, 1600)
 
         # 限制 log_std 范围，避免数值不稳定
-        log_std = jnp.clip(log_stds, -20.0, 2.0)
+        log_stds = jnp.clip(log_stds, -20.0, 2.0)
 
         distribution = TanhMultivariateNormalDiag(loc=means, scale_diag=jnp.exp(log_stds), low=self.low, high=self.high)
         return distribution, means, log_stds

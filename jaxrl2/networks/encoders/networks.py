@@ -10,7 +10,7 @@ from jaxrl2.networks.constants import default_init, xavier_init, kaiming_init
 from functools import partial
 from typing import Any, Callable, Sequence, Tuple
 import distrax
-from jaxrl2.networks.values.attention_modules import CrossAttnTransformer
+from jaxrl2.networks.values.attention_modules import CrossAttnTransformer, QTransformer
 
 
 ModuleDef = Any
@@ -149,7 +149,7 @@ class ActionChunkEncoder(nn.Module):
         return out
     
 
-class ChunkPixelMultiplexer(nn.Module):
+class TransformerPixelMultiplexer(nn.Module):
     encoder: Union[nn.Module, list]
     network: nn.Module
     latent_dim: int
@@ -163,13 +163,15 @@ class ChunkPixelMultiplexer(nn.Module):
     @nn.compact
     def __call__(self,
                  observations: Union[FrozenDict, Dict],
-                 actions: Optional[jnp.ndarray],
+                 actions: jnp.ndarray,
                  training: bool = False):
         observations = FrozenDict(observations)
         
         # print all shapes
         for k,v in observations.items():
             print(f"obs key: {k}, shape: {v.shape}")
+        if len(actions.shape) == 2:
+            actions = actions.reshape(actions.shape[0], -1, self.action_dim)
         print(f"Q action shape: {actions.shape}")
         print(f"Q pixel shape: {observations['pixels'].shape}")
         x = self.encoder(observations['pixels'], training)
@@ -184,16 +186,55 @@ class ChunkPixelMultiplexer(nn.Module):
         x = jnp.concatenate([x, y], axis=-1)    
         print(f"Q combined pixel+state shape: {x.shape}")
         
-        cross_features = CrossAttnTransformer(
+        cross_features = QTransformer(
             seq_len=self.seq_len,
             action_dim=self.action_dim,
             hidden_dim=self.latent_dim,
             num_layers=self.num_layers,
             num_heads=self.num_heads,
             dropout_rate=self.dropout_rate,
-        )(x, training=training)  # (B, 50, hidden_dim)
+        )(x, actions, training=training)  # (B, 50, hidden_dim)
         
-        cross_features = cross_features.reshape(cross_features.shape[0], -1)  # (B, 50*hidden_dim)
-        cross_features = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(cross_features)
+        print(f"Q cross_features shape: {cross_features.shape}")
         
         return self.network(cross_features, training=training)
+    
+class ChunkPixelMultiplexer(nn.Module):
+    encoder: Union[nn.Module, list]
+    network: nn.Module
+    latent_dim: int
+    use_bottleneck: bool=True
+    chunk_encoder: nn.Module=None
+
+    @nn.compact
+    def __call__(self,
+                 observations: Union[FrozenDict, Dict],
+                 actions: Optional[jnp.ndarray],
+                 training: bool = False):
+        observations = FrozenDict(observations)
+        
+        # print all shapes
+        for k,v in observations.items():
+            print(f"obs key: {k}, shape: {v.shape}")
+        print(f"action shape: {actions.shape}")
+
+        x = self.encoder(observations['pixels'], training)
+        if self.use_bottleneck:
+            x = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(x)
+            x = nn.LayerNorm()(x)
+            x = nn.tanh(x)
+        x = observations.copy(add_or_replace={'pixels': x})
+
+        y = observations['state']
+        y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
+        y = nn.LayerNorm()(y)
+        y = nn.tanh(y)
+        x = x.copy(add_or_replace={'state': y})
+        
+        actions = self.chunk_encoder(actions, train=training)
+        
+        # print('fully connected keys', x.keys())
+        if actions is None:
+            return self.network(x, training=training)
+        else:
+            return self.network(x, actions, training=training)
