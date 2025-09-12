@@ -4,12 +4,14 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 from flax.core.frozen_dict import FrozenDict
-
+import numpy as np
 from jaxrl2.networks.constants import default_init, xavier_init, kaiming_init
 
 from functools import partial
 from typing import Any, Callable, Sequence, Tuple
 import distrax
+from jaxrl2.networks.attention_modules import CrossAttnTransformer, QTransformer, QTransformer_nopool
+
 
 ModuleDef = Any
 
@@ -73,8 +75,6 @@ class LargePixelMultiplexer(nn.Module):
     @nn.compact
     def __call__(self,
                  observations: Union[FrozenDict, Dict],
-                 noise: Optional[jnp.ndarray] = None,
-                 actions: Optional[jnp.ndarray] = None,
                  training: bool = False):
         observations = FrozenDict(observations)
         
@@ -88,37 +88,26 @@ class LargePixelMultiplexer(nn.Module):
 
         x = self.encoder(observations['pixels'], training)
         if self.use_bottleneck:
-            x = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(x)
+            x = nn.Dense(self.latent_dim, kernel_init=xavier_init())(x)
             x = nn.LayerNorm()(x)
             x = nn.tanh(x)
-        x = observations.copy(add_or_replace={'pixels': x})
+        print(f"post-encoder flattened shape: {x.shape}")
 
-        y = observations['state']
-        y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
-        y = nn.LayerNorm()(y)
-        y = nn.tanh(y)
-        x = x.copy(add_or_replace={'state': y})
-        
-        if noise is not None:
-            noise = nn.Dense(self.latent_dim, kernel_init=xavier_init())(noise)
-            noise = nn.LayerNorm()(noise)
-            noise = nn.tanh(noise)
-            x = x.copy(add_or_replace={'noise': noise})
-        
-        if actions is not None:
-            actions = nn.Dense(self.latent_dim, kernel_init=xavier_init())(actions)
-            actions = nn.LayerNorm()(actions)
-            actions = nn.tanh(actions)
+        y = observations['state'].reshape(observations['state'].shape[0], -1)
+        # y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
+        # y = nn.LayerNorm()(y)
+        # y = nn.tanh(y)
+        print(f"post-state flattened shape: {y.shape}")
 
-        # print('fully connected keys', x.keys())
-        if actions is None:
-            return self.network(x, training=training)
-        else:
-            return self.network(x, actions, training=training)
+        x = jnp.concatenate([x, y], axis=-1)        
+
+        print(f"final flattened shape: {x.shape}")
+        
+        return self.network(x, training=training)
         
 
 class ActionChunkEncoder(nn.Module):
-    hidden_dim: int = 128
+    hidden_dim: int = 256
     num_heads: int = 4
     num_layers: int = 2
     dropout: float = 0.1
@@ -160,6 +149,160 @@ class ActionChunkEncoder(nn.Module):
         return out
     
 
+class TransformerPixelMultiplexer(nn.Module):
+    encoder: Union[nn.Module, list]
+    latent_dim: int
+    use_bottleneck: bool=True
+    seq_len: int = 50
+    action_dim: int = 32
+    num_layers: int = 4
+    num_heads: int = 8
+    dropout_rate: float = 0.0
+
+    @nn.compact
+    def __call__(self,
+                 observations: Union[FrozenDict, Dict],
+                 actions: jnp.ndarray,
+                 training: bool = False):
+        observations = FrozenDict(observations)
+        if len(actions.shape) == 2:
+            actions = actions.reshape(actions.shape[0], -1, self.action_dim)
+            
+        # print all shapes
+        # for k,v in observations.items():
+        #     print(f"obs key: {k}, shape: {v.shape}")
+
+        # print(f"Q action shape: {actions.shape}")
+        # print(f"Q pixel shape: {observations['pixels'].shape}")
+        x = self.encoder(observations['pixels'], training)
+        # print(f"Q post-encoder flattened shape: {x.shape}")
+        if self.use_bottleneck:
+            x = nn.Dense(self.latent_dim, kernel_init=xavier_init())(x)
+            x = nn.LayerNorm()(x)
+            x = nn.tanh(x)
+
+        y = observations['state'].reshape(observations['state'].shape[0], -1)
+        
+        x = jnp.concatenate([x, y], axis=-1)    
+        print(f"Q combined pixel+state shape: {x.shape}")
+        
+        cross_features = QTransformer(
+            seq_len=self.seq_len,
+            action_dim=self.action_dim,
+            hidden_dim=self.latent_dim,
+            num_layers=self.num_layers,
+            num_heads=self.num_heads,
+            dropout_rate=self.dropout_rate,
+        )(x, actions, training=training)  # (B, hidden_dim)
+        
+        print(f"Q cross_features shape: {cross_features.shape}")
+        
+        q_value = nn.Dense(128)(cross_features)  # (B, 128)
+        q_value = nn.relu(q_value)
+        q_value = nn.Dense(128)(q_value)  # (B, 128)
+        q_value = nn.relu(q_value)
+        q_value = nn.Dense(1)(q_value)           # (B, 1)
+        return q_value.squeeze(-1)
+        
+        # return self.network(cross_features, training=training)
+    
+class EnsembleQ(nn.Module):
+    num_qs: int = 2
+    encoder: nn.Module = None
+    latent_dim: int = 256
+    use_bottleneck: bool = True
+
+    @nn.compact
+    def __call__(self, obs, actions, training=False):
+        qs = []
+        for i in range(self.num_qs):
+            q_net = TransformerPixelMultiplexer(
+                encoder=self.encoder,
+                latent_dim=self.latent_dim,
+                use_bottleneck=self.use_bottleneck,
+                name=f"qnet_{i}",
+            )
+            q = q_net(obs, actions, training)
+            qs.append(q)
+        return jnp.stack(qs, axis=0)  # (num_q, B)
+
+
+
+
+    
+class BehaviorCloningGenerator(nn.Module):
+    encoder: Union[nn.Module, list]
+    bc_action_dim: int = 140
+    action_magnitude: float = 1.0
+    latent_dim: int = 256
+    use_bottleneck: bool=True
+    seq_len: int = 50
+    action_dim: int = 32
+    num_layers: int = 4
+    num_heads: int = 8
+    dropout_rate: float = 0.0
+
+    @nn.compact
+    def __call__(self,
+                 observations: Union[FrozenDict, Dict],
+                 actions: jnp.ndarray,
+                 training: bool = False):
+        observations = FrozenDict(observations)
+        if len(actions.shape) == 2:
+            actions = actions.reshape(actions.shape[0], -1, self.action_dim)
+            
+        # print all shapes
+        # for k,v in observations.items():
+        #     print(f"obs key: {k}, shape: {v.shape}")
+
+        # print(f"Q action shape: {actions.shape}")
+        # print(f"Q pixel shape: {observations['pixels'].shape}")
+        x = self.encoder(observations['pixels'], training)
+        # print(f"Q post-encoder flattened shape: {x.shape}")
+        if self.use_bottleneck:
+            x = nn.Dense(self.latent_dim, kernel_init=xavier_init())(x)
+            x = nn.LayerNorm()(x)
+            x = nn.tanh(x)
+
+        y = observations['state'].reshape(observations['state'].shape[0], -1)
+        # y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
+        # y = nn.LayerNorm()(y)
+        # y = nn.tanh(y)
+        
+        x = jnp.concatenate([x, y], axis=-1)    
+        print(f"BC combined pixel+state shape: {x.shape}")
+        
+        cross_features = QTransformer(
+            seq_len=self.seq_len,
+            action_dim=self.action_dim,
+            hidden_dim=self.latent_dim,
+            num_layers=self.num_layers,
+            num_heads=self.num_heads,
+            dropout_rate=self.dropout_rate,
+        )(x, actions, training=training)  # (B, hidden_dim)
+        
+        print(f"BC cross_features shape: {cross_features.shape}")
+        
+        # cross_features = nn.Dense(32)(cross_features)  # (B, 50, 32)
+        # cross_features = cross_features.reshape(cross_features.shape[0], -1)  # (B, 1600)
+        
+        # cross_features = CrossAttnTransformer(
+        #     seq_len=20,
+        #     action_dim=7,
+        #     hidden_dim=self.latent_dim,
+        #     num_layers=self.num_layers,
+        #     num_heads=self.num_heads,
+        #     dropout_rate=self.dropout_rate,
+        # )(cross_features, training=training)  # (B, 20, hidden_dim)
+        
+        # bc_actions_raw = nn.Dense(self.bc_action_dim)(cross_features.reshape(cross_features.shape[0], -1))  # (B, 140)
+        
+        bc_actions_raw = nn.Dense(self.bc_action_dim)(cross_features)  # (B, 140)
+        # bc_actions = jnp.tanh(bc_actions_raw) * self.action_magnitude
+        bc_actions = bc_actions_raw
+    
+        return bc_actions, bc_actions_raw
+    
 class ChunkPixelMultiplexer(nn.Module):
     encoder: Union[nn.Module, list]
     network: nn.Module
@@ -170,46 +313,7 @@ class ChunkPixelMultiplexer(nn.Module):
     @nn.compact
     def __call__(self,
                  observations: Union[FrozenDict, Dict],
-                 noise: jnp.ndarray,
-                 training: bool = False):
-        observations = FrozenDict(observations)
-        
-        # # print all shapes
-        # for k,v in observations.items():
-        #     print(f"obs key: {k}, shape: {v.shape}")
-        # print(f"action shape: {noise.shape}")
-
-        x = self.encoder(observations['pixels'], training)
-        if self.use_bottleneck:
-            x = nn.Dense(self.latent_dim * 2, kernel_init=xavier_init())(x)
-            x = nn.LayerNorm()(x)
-            x = nn.tanh(x)
-        x = observations.copy(add_or_replace={'pixels': x})
-
-        y = observations['state']
-        y = nn.Dense(self.latent_dim, kernel_init=xavier_init())(y)
-        y = nn.LayerNorm()(y)
-        y = nn.tanh(y)
-        x = x.copy(add_or_replace={'state': y})
-        
-        noise = self.chunk_encoder(noise, train=training)
-        x = x.copy(add_or_replace={'noise': noise})
-        
-        return self.network(x, training=training)
-
-
-
-class ChunkActionsPixelMultiplexer(nn.Module):
-    encoder: Union[nn.Module, list]
-    network: nn.Module
-    latent_dim: int
-    use_bottleneck: bool=True
-    chunk_encoder: nn.Module=None
-
-    @nn.compact
-    def __call__(self,
-                 observations: Union[FrozenDict, Dict],
-                 actions: jnp.ndarray,
+                 actions: Optional[jnp.ndarray],
                  training: bool = False):
         observations = FrozenDict(observations)
         
@@ -233,4 +337,8 @@ class ChunkActionsPixelMultiplexer(nn.Module):
         
         actions = self.chunk_encoder(actions, train=training)
         
-        return self.network(x, actions, training=training)
+        # print('fully connected keys', x.keys())
+        if actions is None:
+            return self.network(x, training=training)
+        else:
+            return self.network(x, actions, training=training)

@@ -15,7 +15,8 @@ class StateValue(nn.Module):
                  observations: jnp.ndarray,
                  training: bool = False) -> jnp.ndarray:
         critic = MLP((*self.hidden_dims, 1),
-                     activations=self.activations)(observations,
+                     activations=self.activations,
+                     use_layer_norm=True)(observations,
                                                    training=training)
         return jnp.squeeze(critic, -1)
 

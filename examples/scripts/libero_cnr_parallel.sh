@@ -13,31 +13,38 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=bc_full,task_id=1,bc_coeff=1.0"
-  "label=bc_full,task_id=9,bc_coeff=1.0"
-  "label=bc_full,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=1.0"
-  "label=bc_full,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=1.0"
+  "label=bc_full_v3,task_id=1,bc_coeff=0.0"
+  "label=bc_full_v3,task_id=9,bc_coeff=0.0"
+  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=0.0"
+  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=0.0"
+  "label=bc_full_v3,task_id=1,bc_coeff=1.0"
+  "label=bc_full_v3,task_id=9,bc_coeff=1.0"
+  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=1.0"
+  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=1.0"
 
-  "label=bc_full,task_id=1,bc_coeff=5.0"
-  "label=bc_full,task_id=9,bc_coeff=5.0"
-  "label=bc_full,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=5.0"
-  "label=bc_full,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=5.0"
+  "label=bc_full_v3,task_id=1,bc_coeff=10.0"
+  "label=bc_full_v3,task_id=9,bc_coeff=10.0"
+  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=10.0"
+  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=10.0"
+  "label=bc_full_v3,task_id=1,bc_coeff=100.0"
+  "label=bc_full_v3,task_id=9,bc_coeff=100.0"
+  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=100.0"
+  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=100.0"
 
-  "label=bc_full,task_id=1,bc_coeff=10.0"
-  "label=bc_full,task_id=9,bc_coeff=10.0"
-  "label=bc_full,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=10.0"
-  "label=bc_full,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=10.0"
-
-  "label=bc_full,task_id=1,bc_coeff=0.1"
-  "label=bc_full,task_id=9,bc_coeff=0.1"
-  "label=bc_full,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=0.1"
-  "label=bc_full,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=0.1"
+  "label=bc_full_v3,task_id=1,bc_coeff=1000.0"
+  "label=bc_full_v3,task_id=9,bc_coeff=1000.0"
+  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=1000.0"
+  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=1000.0"
+  "label=bc_full_v3,task_id=1,bc_coeff=10000.0"
+  "label=bc_full_v3,task_id=9,bc_coeff=10000.0"
+  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=10000.0"
+  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=10000.0"
 )
 
 
 
-per_proc_cap_gb=12
-max_concurrency_per_gpu=6
+per_proc_cap_gb=19
+max_concurrency_per_gpu=4
 safety_gb=1
 sleep_between_launch=1
 check_interval=0
@@ -228,7 +235,7 @@ start_task_on_slot() {
       --max_steps 500000 \
       --eval_interval 10000 \
       --log_interval 500 \
-      --eval_episodes 20 \
+      --eval_episodes 10 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --query_freq 20 \
@@ -243,7 +250,7 @@ start_task_on_slot() {
       --use_res 0 \
       --max_timesteps 500 \
       --res_H 60000 \
-      --action_magnitude 3.0 \
+      --action_magnitude 1.0 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?

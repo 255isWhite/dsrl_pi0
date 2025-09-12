@@ -155,6 +155,7 @@ def trajwise_alternating_training_loop(variant, agent, env, eval_env, online_rep
                         else:
                             update_info = {}
                             res_update_info = {}
+                            distill_info = {}
                     else:
                         if variant.use_res:
                             update_info, res_update_info = agent.update(batch, res_prob)

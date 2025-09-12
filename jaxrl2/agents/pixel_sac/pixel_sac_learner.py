@@ -20,7 +20,7 @@ from typing import Any
 
 from jaxrl2.agents.agent import Agent
 from jaxrl2.data.augmentations import batched_random_crop, color_transform
-from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer, ChunkActionsPixelMultiplexer
+from jaxrl2.networks.encoders.networks import Encoder, PixelMultiplexer, ActionChunkEncoder, ChunkPixelMultiplexer, LargePixelMultiplexer, TransformerPixelMultiplexer, BehaviorCloningGenerator, EnsembleQ
 from jaxrl2.networks.encoders.impala_encoder import ImpalaEncoder, SmallerImpalaEncoder
 from jaxrl2.networks.encoders.resnet_encoderv1 import ResNet18, ResNet34, ResNetSmall
 from jaxrl2.networks.encoders.resnet_encoderv2 import ResNetV2Encoder
@@ -29,9 +29,11 @@ from jaxrl2.agents.pixel_sac.critic_updater import update_critic, update_critic_
 from jaxrl2.agents.pixel_sac.temperature_updater import update_temperature
 from jaxrl2.agents.pixel_sac.temperature import Temperature
 from jaxrl2.data.dataset import DatasetDict
+from jaxrl2.networks.chunk_gaussian_policy import ChunkGaussianPolicy
+from jaxrl2.networks.chunk_policy import ChunkPolicy
 from jaxrl2.networks.learned_std_normal_policy import LearnedStdTanhNormalPolicy
 from jaxrl2.networks.deterministic_policy import DeterministicPolicy
-from jaxrl2.networks.values import StateActionEnsemble
+from jaxrl2.networks.values import StateActionEnsemble, StateValueEnsemble
 from jaxrl2.types import Params, PRNGKey
 from jaxrl2.utils.target_update import soft_target_update
 
@@ -41,6 +43,29 @@ class TrainState(train_state.TrainState):
 
 def count_parameters(params):
     return sum(np.prod(p.shape) for p in jax.tree_util.tree_leaves(params))
+def count_parameters_per_module(params):
+    counts = {}
+    def helper(subtree, path=()):
+        if isinstance(subtree, dict):
+            total = 0
+            for k, v in subtree.items():
+                sub_total = helper(v, path + (k,))
+                total += sub_total
+            # 如果这个 dict 有叶子参数，记录下来
+            if total > 0:
+                counts["/".join(path)] = total
+            return total
+        else:
+            return np.prod(subtree.shape)
+    helper(params)
+    return counts
+
+def count_top_modules(params):
+    counts = {}
+    for module, subparams in params.items():
+        n = sum(np.prod(p.shape) for p in jax.tree_util.tree_leaves(subparams))
+        counts[module] = n
+    return counts
 
 @functools.partial(jax.jit, static_argnames=('critic_reduction', 'color_jitter',  'aug_next', 'num_cameras'))
 def _distill_jit(
@@ -285,7 +310,7 @@ class PixelSACLearner(Agent):
                  decay_kl: int = 0,
                  chunk_len: int = 20,
                  distill_action_dim: int = 7,
-                 distill_hidden_dim: int = 128,
+                 distill_hidden_dim: int = 256,
                  bc_coeff: float = 0.0,
                  ):
         """
@@ -340,12 +365,11 @@ class PixelSACLearner(Agent):
 
         if len(hidden_dims) == 1:
             hidden_dims = (hidden_dims[0], hidden_dims[0], hidden_dims[0])
-        
-        policy_def = LearnedStdTanhNormalPolicy(hidden_dims, self.action_dim, dropout_rate=dropout_rate, low=-action_magnitude, high=action_magnitude)
 
-        actor_def = PixelMultiplexer(encoder=encoder_def,
+        policy_def = ChunkGaussianPolicy(dropout_rate=dropout_rate, low=-action_magnitude, high=action_magnitude, hidden_dim=self.distill_hidden_dim)
+        actor_def = LargePixelMultiplexer(encoder=encoder_def,
                                      network=policy_def,
-                                     latent_dim=latent_dim,
+                                     latent_dim=self.distill_hidden_dim,
                                      use_bottleneck=use_bottleneck
                                      )
         print(actor_def)
@@ -358,14 +382,15 @@ class PixelSACLearner(Agent):
                                   tx=optax.adam(learning_rate=actor_lr),
                                   batch_stats=actor_batch_stats)
 
-        action_chunk_def = ActionChunkEncoder(out_dim=self.distill_hidden_dim)
-        critic_def = StateActionEnsemble(hidden_dims, num_qs=num_qs)
-        critic_def = ChunkActionsPixelMultiplexer(encoder=encoder_def,
-                                      network=critic_def,
-                                      latent_dim=self.distill_hidden_dim,
-                                      use_bottleneck=use_bottleneck,
-                                      chunk_encoder=action_chunk_def,
-                                      )
+        # critic_def = StateValueEnsemble(hidden_dims, num_vs=num_qs)
+        critic_def = EnsembleQ(
+            encoder=encoder_def,
+            latent_dim=self.distill_hidden_dim,
+            use_bottleneck=use_bottleneck,
+            num_qs=num_qs,
+        )
+
+        
         print(critic_def)
         critic_def_init = critic_def.init(critic_key, observations, actions)
         self._critic_init_params = critic_def_init['params']
@@ -387,12 +412,12 @@ class PixelSACLearner(Agent):
                                  batch_stats=None)
         
         # residual head part
-        distill_policy_def = DeterministicPolicy(hidden_dims, 20 * 7, dropout_rate=dropout_rate, action_magnitude=action_magnitude)
-        distill_actor_def = ChunkPixelMultiplexer(encoder=encoder_def,
-                                     network=distill_policy_def,
+        distill_actor_def = BehaviorCloningGenerator(encoder=encoder_def,
+                                     bc_action_dim=self.chunk_len*self.distill_action_dim,
+                                     action_magnitude=action_magnitude,
                                      latent_dim=self.distill_hidden_dim,
                                      use_bottleneck=use_bottleneck,
-                                     chunk_encoder=action_chunk_def,
+                                     dropout_rate=dropout_rate
                                      )
         print(distill_actor_def)
         magic_actions = np.zeros((observations['pixels'].shape[0], 50, 32), dtype=np.float32)
@@ -421,6 +446,35 @@ class PixelSACLearner(Agent):
         print('actor params (M): ', count_parameters(self._actor.params)/1e6)
         print('critic params (M): ', count_parameters(self._critic.params)/1e6)
         print('distill actor params (M): ', count_parameters(self._distill_actor.params)/1e6)
+        print('total params (M): ', (count_parameters(self._actor.params)+count_parameters(self._critic.params) +count_parameters(self._distill_actor.params))/1e6)
+
+        actor_counts = count_parameters_per_module(self._actor.params)
+        print('actor params breakdown:')
+        for module, n_params in actor_counts.items():
+            print(f"{module:40s}: {n_params/1e6:.2f} M")
+            
+        critic_counts = count_parameters_per_module(self._critic.params)
+        print('critic params breakdown:')
+        for module, n_params in critic_counts.items():
+            print(f"{module:40s}: {n_params/1e6:.2f} M")
+            
+        distill_actor_counts = count_parameters_per_module(self._distill_actor.params)
+        print('distill actor params breakdown:')
+        for module, n_params in distill_actor_counts.items():
+            print(f"{module:40s}: {n_params/1e6:.2f} M")
+            
+        print('top-level actor params breakdown:')
+        actor_top_counts = count_top_modules(self._actor.params)
+        for module, n_params in actor_top_counts.items():
+            print(f"{module:20s}: {n_params/1e6:.2f} M")
+        print('top-level critic params breakdown:')
+        critic_top_counts = count_top_modules(self._critic.params)
+        for module, n_params in critic_top_counts.items():
+            print(f"{module:20s}: {n_params/1e6:.2f} M")
+        print('top-level distill actor params breakdown:')
+        distill_actor_top_counts = count_top_modules(self._distill_actor.params)
+        for module, n_params in distill_actor_top_counts.items():
+            print(f"{module:20s}: {n_params/1e6:.2f} M")
         
         
     def update_with_bc(self, batch: FrozenDict) -> Dict[str, float]:

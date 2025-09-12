@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--label', default='', help='label for wandb run', type=str)
     parser.add_argument('--decay_kl', default=0, help='whether to decay kl coeff', type=int)
     parser.add_argument('--media_log_fold', default=10, help='fold for media logging', type=int)
-    parser.add_argument('--distill_hidden_dim', default=128, help='hidden dim for residual policy and Q', type=int)
+    parser.add_argument('--distill_hidden_dim', default=256, help='hidden dim for residual policy and Q', type=int)
     parser.add_argument('--bc_coeff', default=0.0, help='coefficient for behavior cloning loss', type=float)
     
     train_args_dict = dict(
@@ -60,12 +60,12 @@ if __name__ == '__main__':
         dropout_rate=0.0,
         aug_next=1,
         use_bottleneck=True,
-        encoder_type='small',
+        encoder_type='resnet_small',
         encoder_norm='group',
         use_spatial_softmax=True,
         softmax_temperature=-1,
         target_entropy='auto',
-        num_qs=10,
+        num_qs=2,
         action_magnitude=1.0,
         num_cameras=1,
         )
