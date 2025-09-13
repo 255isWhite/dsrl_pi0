@@ -5,7 +5,7 @@ import pathlib
 from flax.training.train_state import TrainState
 
 from jaxrl2.agents.common import (eval_actions_jit, eval_log_prob_jit, eval_mse_jit, eval_reward_function_jit,
-                                  sample_actions_jit)
+                                  sample_actions_jit, sample_actions_deterministic_jit)
 from jaxrl2.data.dataset import DatasetDict
 from jaxrl2.types import PRNGKey
 
@@ -40,6 +40,13 @@ class Agent(object):
 
     def sample_actions(self, observations: np.ndarray) -> np.ndarray:
         rng, actions = sample_actions_jit(self._rng, self._actor.apply_fn,
+                                          self._actor.params, observations, get_batch_stats(self._actor))
+
+        self._rng = rng
+        return np.asarray(actions)
+
+    def sample_actions_deterministic(self, observations: np.ndarray) -> np.ndarray:
+        rng, actions = sample_actions_deterministic_jit(self._rng, self._actor.apply_fn,
                                           self._actor.params, observations, get_batch_stats(self._actor))
 
         self._rng = rng

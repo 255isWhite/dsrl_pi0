@@ -86,7 +86,9 @@ class ChunkGaussianPolicy(nn.Module):
         # log_stds = nn.Dense(self.seq_len * self.action_dim)(x)   # (B, 1600)
 
         # 限制 log_std 范围，避免数值不稳定
-        log_stds = jnp.clip(log_stds, -20.0, 2.0)
+        # log_stds = jnp.clip(log_stds, -20.0, 2.0)
+        
+        log_stds = nn.tanh(log_stds) * 2.0 - 3.0  # 映射到 [-5, -1]
 
         distribution = TanhMultivariateNormalDiag(loc=means, scale_diag=jnp.exp(log_stds), low=self.low, high=self.high)
         return distribution, means, log_stds

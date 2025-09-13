@@ -13,32 +13,15 @@ proj_name="CoupleNR_LIBERO"
 
 gpu_list=(0 1 2 3 4 5 6 7)                          # 物理 GPU ID
 ablations=(
-  "label=bc_full_v3,task_id=1,bc_coeff=0.0"
-  "label=bc_full_v3,task_id=9,bc_coeff=0.0"
-  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=0.0"
-  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=0.0"
-  "label=bc_full_v3,task_id=1,bc_coeff=1.0"
-  "label=bc_full_v3,task_id=9,bc_coeff=1.0"
-  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=1.0"
-  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=1.0"
+  "label=bc_full_v5,bc_coeff=0.0,init_temperature=0.01"
+  "label=bc_full_v5,bc_coeff=1.0,init_temperature=0.01"
+  "label=bc_full_v5,bc_coeff=100.0,init_temperature=0.01"
+  "label=bc_full_v5,bc_coeff=1000.0,init_temperature=0.01"
 
-  "label=bc_full_v3,task_id=1,bc_coeff=10.0"
-  "label=bc_full_v3,task_id=9,bc_coeff=10.0"
-  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=10.0"
-  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=10.0"
-  "label=bc_full_v3,task_id=1,bc_coeff=100.0"
-  "label=bc_full_v3,task_id=9,bc_coeff=100.0"
-  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=100.0"
-  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=100.0"
-
-  "label=bc_full_v3,task_id=1,bc_coeff=1000.0"
-  "label=bc_full_v3,task_id=9,bc_coeff=1000.0"
-  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=1000.0"
-  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=1000.0"
-  "label=bc_full_v3,task_id=1,bc_coeff=10000.0"
-  "label=bc_full_v3,task_id=9,bc_coeff=10000.0"
-  "label=bc_full_v3,task_id=4,task_suite=libero_spatial,max_timesteps=400,bc_coeff=10000.0"
-  "label=bc_full_v3,task_id=5,task_suite=libero_object,max_timesteps=400,bc_coeff=10000.0"
+  "label=bc_full_v5,bc_coeff=0.0,temp_lr=0.003"
+  "label=bc_full_v5,bc_coeff=1.0,temp_lr=0.003"
+  "label=bc_full_v5,bc_coeff=100.0,temp_lr=0.003"
+  "label=bc_full_v5,bc_coeff=1000.0,temp_lr=0.003"
 )
 
 
@@ -234,14 +217,15 @@ start_task_on_slot() {
       --batch_size 256 \
       --max_steps 500000 \
       --eval_interval 10000 \
-      --log_interval 500 \
+      --log_interval 50 \
+      --media_log_fold 100 \
       --eval_episodes 10 \
       --multi_grad_step 20 \
       --start_online_updates 500 \
       --query_freq 20 \
-      --task_id 21 \
+      --task_id 9 \
       --task_suite libero_10 \
-      --pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_libero40_10-30shot/20000 \
+      --pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
       --pi0_config pi0_libero40_10-30shot \
       --eval_at_begin 1 \
       --qwarmup 1 \
@@ -251,6 +235,7 @@ start_task_on_slot() {
       --max_timesteps 500 \
       --res_H 60000 \
       --action_magnitude 1.0 \
+      --init_temperature 1.0 \
       $(echo $ablation_args) \
       >>"$log_file" 2>&1
     status=$?

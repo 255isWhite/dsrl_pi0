@@ -31,7 +31,7 @@ JAX_TRACEBACK_FILTERING=off python3 examples/launch_train_sim.py \
 --query_freq 20 \
 --task_id 0 \
 --task_suite libero_goal \
---pi0_model /data/soft/wangzh/.cache/openpi/checkpoints/pi0_libero40_10-30shot/20000 \
+--pi0_model /data0/zh1/.cache/openpi/pi0_libero40_10-30shot/pi0_libero40_10-30shot/20000 \
 --pi0_config pi0_libero40_10-30shot \
 --eval_at_begin 1 \
 --kl_coeff 0.0 \

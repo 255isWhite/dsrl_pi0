@@ -98,6 +98,19 @@ def sample_actions_jit(
     return rng, dist.sample(seed=key)
 
 @partial(jax.jit, static_argnames='actor_apply_fn')
+def sample_actions_deterministic_jit(
+        rng: PRNGKey, actor_apply_fn: Callable[..., distrax.Distribution],
+        actor_params: Params,
+        observations: np.ndarray,
+        actor_batch_stats: Any) -> Tuple[PRNGKey, jnp.ndarray]:
+    input_collections = {'params': actor_params}
+    if actor_batch_stats is not None:
+        input_collections['batch_stats'] = actor_batch_stats
+    dist, means, log_stds = actor_apply_fn(input_collections, observations)
+    rng, key = jax.random.split(rng)
+    return rng, dist.mode()
+
+@partial(jax.jit, static_argnames='actor_apply_fn')
 def sample_deterministic_actions_jit(
         rng: PRNGKey, actor_apply_fn: Callable[..., distrax.Distribution],
         actor_params: Params,
